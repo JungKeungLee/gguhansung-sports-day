@@ -3,7 +3,7 @@ import { GATE_IMAGES, assetUrl } from '../game/images';
 import { Avatar } from './Avatar';
 
 /** 운동회 메인 화면: 종목 선택 + 사운드 설정 */
-export function HomeScreen({ onRun100, onSettings }: { onRun100: () => void; onSettings: () => void }) {
+export function HomeScreen({ onRun100, onPinball, onSettings }: { onRun100: () => void; onPinball: () => void; onSettings: () => void }) {
   return (
     <div className="home-screen">
       <button type="button" className="btn small home-sound" onClick={onSettings}>⚙️ 사운드 설정</button>
@@ -28,13 +28,13 @@ export function HomeScreen({ onRun100, onSettings }: { onRun100: () => void; onS
           <div className="ec-desc">스킬·필살기·장애물, 그리고 도망가는 결승선!<br />자동으로 달리는 대환장 레이스</div>
           <div className="ec-go">참가 선수 고르기 ▶</div>
         </button>
-        <div className="event-card pinball" aria-disabled="true">
-          <div className="ec-ribbon">준비 중</div>
-          <div className="ec-ball">🎯</div>
+        <button type="button" className="event-card pinball" onClick={onPinball}>
+          <div className="ec-ribbon">NEW</div>
+          <div className="ec-ball">🎱</div>
           <div className="ec-title">🎱 핀볼 레이스</div>
-          <div className="ec-desc">멤버 구슬이 핀을 튕기며 내려오는<br />운에 맡기는 레이스 — 곧 공개!</div>
-          <div className="ec-go muted">COMING SOON</div>
-        </div>
+          <div className="ec-desc">닉네임 공들이 핀을 튕기며 내려오는<br />운에 맡기는 물리 레이스!</div>
+          <div className="ec-go">참가자 입력 ▶</div>
+        </button>
       </div>
     </div>
   );

@@ -409,3 +409,115 @@ img.avatar { border: none; border-radius: 0; object-fit: contain; background: tr
 .sp-toggle { margin-left: auto; width: 110px; padding: 10px 0; border-radius: 999px; border: 2px solid #6c74b0; background: #2b2333; color: #fff; font-weight: 900; font-size: 20px; }
 .sp-toggle.on { background: #c62828; border-color: #ffd166; }
 .sp-close { display: block; margin: 24px auto 0; min-width: 200px; }
+
+/* ───── 핀볼 레이스 ───── */
+.event-card.pinball { filter: none; opacity: 1; cursor: pointer; transition: transform .15s, box-shadow .15s; }
+.event-card.pinball:hover { transform: translateY(-6px); box-shadow: 0 16px 40px rgba(212,160,23,.35), inset 0 0 0 3px #c62828; }
+.event-card.pinball .ec-ball { filter: none; opacity: 1; }
+.pb-setup { position: absolute; inset: 0; display: flex; flex-direction: column; padding: 40px 80px;
+  background: radial-gradient(ellipse at 50% 0%, #4a1020 0%, #1a0a12 55%, #0d0609 100%); }
+.pb-head { text-align: center; }
+.pb-head h1 { font-size: 64px; color: #ffd166; text-shadow: 0 5px 0 #7a2a54; margin-top: 8px; }
+.pb-head p { font-size: 22px; color: #f2dfe6; margin-top: 6px; }
+.pb-head p b { color: #ffd166; }
+.pb-body { display: flex; gap: 40px; margin-top: 28px; flex: 1; min-height: 0; }
+.pb-input, .pb-side { flex: 1; display: flex; flex-direction: column; gap: 10px; min-height: 0; }
+.pb-label { font-size: 22px; font-weight: 800; color: #ffd166; }
+.pb-input textarea { flex: 1; resize: none; padding: 18px 20px; border-radius: 18px; border: 3px solid #d4a017; background: #160709; color: #fff;
+  font: 700 26px/1.5 'Malgun Gothic', sans-serif; outline: none; }
+.pb-input textarea:focus { box-shadow: 0 0 0 3px #c62828; }
+.pb-total { font-size: 22px; } .pb-total b { color: #ffd166; font-size: 28px; } .pb-total.over b { color: #ff5252; }
+.pb-errors { list-style: none; color: #ffb3b3; font-size: 18px; line-height: 1.5; }
+.pb-modes { display: flex; gap: 14px; }
+.pb-mode { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 16px; border-radius: 18px; border: 3px solid #5a2a35; background: #1e0a10; color: #fff; }
+.pb-mode.on { border-color: #ffd166; background: linear-gradient(180deg, #4a1020, #1e0a10); box-shadow: 0 0 18px rgba(255,209,102,.35); }
+.pm-icon { font-size: 40px; } .pm-title { font-size: 22px; font-weight: 900; } .pm-desc { font-size: 16px; color: #e8cfd8; }
+.pb-preview { flex: 1; min-height: 0; overflow: auto; display: flex; flex-wrap: wrap; align-content: flex-start; gap: 8px; padding: 14px; border-radius: 18px; background: rgba(0,0,0,.3); }
+.pb-chip { display: inline-flex; align-items: center; gap: 6px; padding: 5px 12px; border-radius: 999px; background: #2b1520; font-size: 18px; font-weight: 700; }
+.pb-chip i { width: 16px; height: 16px; border-radius: 50%; border: 2px solid #fff; }
+.pb-empty { color: #a99; font-size: 18px; }
+.pb-foot { margin-top: 20px; }
+.pb-screen { position: absolute; inset: 0; background: #0d0609; }
+.pb-host { position: absolute; left: 560px; top: 76px; border: 3px solid #d4a017; border-radius: 6px; overflow: hidden; }
+.pb-host canvas { display: block; }
+.pb-left { position: absolute; left: 24px; top: 96px; width: 510px; display: flex; flex-direction: column; gap: 14px; }
+.pb-stat { display: flex; justify-content: space-between; padding: 14px 20px; border-radius: 14px; background: rgba(255,255,255,.06); font-size: 22px; }
+.pb-stat b { color: #ffd166; }
+.pb-actions { display: flex; flex-direction: column; gap: 12px; margin-top: 8px; }
+.pb-winner { padding: 16px 20px; border-radius: 16px; border: 4px solid; background: rgba(0,0,0,.4); font-size: 26px; }
+.pb-winner b { color: #ffd166; font-size: 32px; margin-left: 6px; }
+.pb-winner small { display: block; font-size: 17px; color: #e8cfd8; margin-top: 4px; }
+.pb-note { padding: 14px 18px; border-radius: 14px; background: rgba(0,119,182,.25); font-size: 19px; }
+.pb-right { position: absolute; left: 1390px; top: 86px; width: 506px; bottom: 20px; padding: 16px; border-radius: 18px; border: 3px solid #7a1a1a; background: rgba(0,0,0,.35); display: flex; flex-direction: column; }
+.pb-right h2 { font-size: 26px; color: #ffd166; margin-bottom: 10px; }
+.pb-arrivals { list-style: none; overflow: auto; flex: 1; }
+.pb-arrivals li { display: flex; align-items: center; gap: 10px; padding: 5px 6px; font-size: 19px; border-bottom: 1px solid rgba(255,255,255,.06); }
+.pa-no { width: 34px; text-align: right; font-weight: 900; color: #ffd166; }
+.pb-arrivals i { width: 16px; height: 16px; border-radius: 50%; border: 2px solid #fff; flex: none; }
+.pa-name { flex: 1; font-weight: 700; } .pa-time { font-variant-numeric: tabular-nums; color: #c9cdf0; }
+
+/* ───── 핀볼 배속 ───── */
+.pb-speed { display: flex; gap: 4px; padding: 3px; border-radius: 12px; background: #2a0d14; border: 2px solid #7a1a1a; }
+.pb-speed-btn { min-width: 52px; padding: 6px 10px; border: none; border-radius: 9px; background: transparent; color: #e8cfd8; font: 900 18px 'Arial Black', sans-serif; }
+.pb-speed-btn.on { background: linear-gradient(180deg, #ffd166, #d4a017); color: #2b1100; box-shadow: 0 0 10px rgba(255,209,102,.5); }
+/* ───── 핀볼 결과 ───── */
+.pbr-screen { position: absolute; inset: 0; display: flex; flex-direction: column; padding: 30px 70px 26px;
+  background: radial-gradient(ellipse at 50% 0%, #4a1020 0%, #1a0a12 55%, #0d0609 100%); }
+.pbr-head { text-align: center; }
+.pbr-head h1 { font-size: 64px; color: #ffd166; text-shadow: 0 5px 0 #7a2a54; margin-top: 6px; }
+.pbr-sub { font-size: 24px; color: #f2dfe6; } .pbr-sub b { color: #ffd166; }
+.pbr-body { flex: 1; min-height: 0; display: flex; gap: 40px; margin-top: 20px; }
+.pbr-podium { width: 760px; display: flex; align-items: flex-end; justify-content: center; gap: 16px; }
+.pbr-spot { display: flex; flex-direction: column; align-items: center; width: 230px; animation: rise .7s ease-out both; }
+.pbr-ball { width: 110px; height: 110px; border-radius: 50%; border: 5px solid #fff; display: flex; align-items: center; justify-content: center;
+  font-size: 46px; font-weight: 900; color: #fff; text-shadow: 0 2px 0 #000; box-shadow: 0 8px 20px rgba(0,0,0,.5); }
+.pbr-spot.p1 .pbr-ball { width: 140px; height: 140px; font-size: 58px; box-shadow: 0 0 30px rgba(255,209,102,.6); }
+.pbr-name { font-size: 26px; font-weight: 900; margin-top: 10px; }
+.pbr-time { font-size: 19px; color: #e8cfd8; font-variant-numeric: tabular-nums; }
+.pbr-block { width: 100%; margin-top: 10px; border-radius: 14px 14px 0 0; display: flex; align-items: center; justify-content: center; font-size: 30px; font-weight: 900; }
+.pbr-spot.p1 .pbr-block { height: 200px; background: linear-gradient(180deg, #ffd600, #c79a00); color: #3a2400; }
+.pbr-spot.p2 .pbr-block { height: 150px; background: linear-gradient(180deg, #e0e0e0, #9e9e9e); color: #2b2b2b; }
+.pbr-spot.p3 .pbr-block { height: 110px; background: linear-gradient(180deg, #ffab73, #b8693a); color: #3a1a00; }
+.pbr-table-wrap { flex: 1; min-height: 0; overflow-y: auto; border-radius: 18px; border: 3px solid #7a1a1a; background: rgba(0,0,0,.35); padding: 6px 14px; }
+.pbr-table { width: 100%; margin: 0; }
+.pbr-table thead th { position: sticky; top: 0; background: #1e0a10; }
+.pbr-btns { display: flex; justify-content: center; gap: 18px; margin-top: 18px; }
+
+/* ───── 핀볼 멤버 선택 ───── */
+.pb-body { gap: 28px; }
+.pb-members { width: 560px; flex: none; display: flex; flex-direction: column; gap: 10px; }
+.pb-member-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.pb-member { display: flex; align-items: center; gap: 6px; padding: 6px 10px; border-radius: 14px; border: 2px solid #4a1a24; background: #1e0a10; }
+.pb-member.on { border-color: #ffd166; background: linear-gradient(180deg, #4a1020, #1e0a10); }
+.pbm-check { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 19px; font-weight: 800; white-space: nowrap; }
+.pbm-check input { width: 22px; height: 22px; accent-color: #ff5f8f; cursor: pointer; }
+.pbm-count { width: 64px; padding: 6px 8px; border-radius: 10px; border: 2px solid #d4a017; background: #160709; color: #fff; font: 800 18px sans-serif; text-align: center; }
+.pbm-count:disabled { opacity: .35; border-color: #4a1a24; }
+.pbm-unit { font-size: 16px; color: #e8cfd8; }
+.pb-member-btns { display: flex; gap: 10px; }
+.pb-input textarea { font-size: 22px; }
+.pm-title { font-size: 19px; white-space: nowrap; }
+
+/* ───── 핀볼 맵 선택 ───── */
+.pb-maps { display: flex; flex-direction: column; gap: 6px; }
+.pb-map { display: grid; grid-template-columns: 34px 170px 1fr; align-items: center; gap: 8px; padding: 7px 12px; border-radius: 12px; border: 2px solid #4a1a24; background: #1e0a10; color: #fff; text-align: left; }
+.pb-map.on { border-color: #ffd166; background: linear-gradient(90deg, #4a1020, #1e0a10); box-shadow: 0 0 12px rgba(255,209,102,.3); }
+.pmap-icon { font-size: 24px; } .pmap-name { font-size: 18px; font-weight: 900; } .pmap-desc { font-size: 14px; color: #e8cfd8; }
+.pb-mode { padding: 10px 12px; } .pm-icon { font-size: 30px; } .pm-desc { font-size: 14px; }
+/* 핀볼 설정: 맵 미리보기 · 공 섞기 */
+.pb-mapview { display: flex; flex-direction: column; gap: 4px; padding: 6px; border-radius: 12px; border: 2px solid #4a1a24; background: #12050a; color: #f2dfe6; cursor: zoom-in; }
+.pb-mapview:hover { border-color: #ffd166; }
+.pb-mapview-svg { width: 100%; height: 132px; display: block; }
+.pb-mapview-note { font-size: 13px; color: #d9b8c3; text-align: center; }
+.pb-mapview-modal { position: absolute; inset: 0; z-index: 50; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; padding: 40px; background: rgba(8,2,4,.92); cursor: zoom-out; }
+.pb-mapview-big { width: 100%; max-height: 82%; }
+.pb-prev-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.pb-shuffled { font-size: 15px; color: #ff9db0; font-style: normal; }
+/* 오른쪽 열 압축 (맵 미리보기 추가로 1080 높이에 맞춤) */
+.pb-side { gap: 8px; }
+.pb-side .pb-map { padding: 4px 12px; }
+.pb-side .pb-mode { display: grid; grid-template-columns: 40px 1fr; grid-template-rows: auto auto; column-gap: 8px; row-gap: 2px; align-items: center; padding: 8px 12px; text-align: left; }
+.pb-side .pb-mode .pm-icon { grid-row: 1 / 3; font-size: 28px; }
+.pb-side .pb-mode .pm-desc { font-size: 13px; }
+.pb-side .pb-preview { min-height: 60px; }
+.pb-mapview-svg { height: 116px; }
