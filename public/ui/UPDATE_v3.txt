@@ -1,0 +1,4 @@
+수정 사항 (v3)
+- announcer_banner.webp: 예시 제목과 중계 문구를 제거한 빈 중계 프레임. 실제 중계 문장은 React에서 렌더링.
+- countdown_panel.webp: 숫자 3과 '카운트다운' 문구를 제거한 빈 카운트다운 프레임. 3, 2, 1은 React/Phaser 텍스트로 동적 표시.
+다른 UI 에셋은 v2와 동일.

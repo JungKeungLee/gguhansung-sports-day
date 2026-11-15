@@ -1,0 +1,306 @@
+import { describe, expect, it } from 'vitest';
+import { CHARACTERS } from '../src/game/characters';
+import { CONFIG } from '../src/game/config';
+import { Race } from '../src/game/sim/race';
+import { useSkill, aiTick } from '../src/game/sim/skills';
+import { registerHit, applyOpponentSlow, addEffect } from '../src/game/sim/runner';
+import { crossObstacles } from '../src/game/sim/obstacles';
+import { buildResults, assignRanks, formatCopyText } from '../src/game/result';
+import { canStart, toggleSelect } from '../src/ui/selection';
+import type { CharId } from '../src/game/types';
+
+const ALL = CHARACTERS.map((c) => c.id);
+const r = (race: Race, id: CharId) => race.runners.find((x) => x.def.id === id)!;
+const cfgNoEvents = { ...CONFIG, finishMove: { ...CONFIG.finishMove, chancePerSecond: 0 }, cheer: { ...CONFIG.cheer, chancePerSecond: 0 } };
+
+describe('참가 선택', () => {
+  it('1명 시작 불가 / 2명·10명 시작 가능', () => {
+    expect(canStart(['yappu'])).toBe(false);
+    expect(canStart(['yappu', 'moya'])).toBe(true);
+    expect(canStart(ALL)).toBe(true);
+  });
+  it('중복 선택 불가, 재클릭 시 해제', () => {
+    let s = toggleSelect([], 'yappu');
+    s = toggleSelect(s, 'moya');
+    expect(s).toEqual(['yappu', 'moya']);
+    s = toggleSelect(s, 'yappu');
+    expect(s).toEqual(['moya']);
+    expect(() => new Race(['yappu', 'yappu'], 1)).toThrow();
+    expect(() => new Race(['yappu'], 1)).toThrow();
+  });
+});
+
+describe('경기 시뮬레이션', () => {
+  it('같은 시드 → 같은 결과 (재현성)', () => {
+    const a = buildResults(new Race(ALL, 42).runToEnd());
+    const b = buildResults(new Race(ALL, 42).runToEnd());
+    expect(a.map((x) => [x.id, x.timeMs])).toEqual(b.map((x) => [x.id, x.timeMs]));
+  });
+
+  it('2~10명 모두 완주, 강제 종료 없음, 결과 정렬', () => {
+    for (let n = 2; n <= 10; n++) {
+      for (let s = 0; s < 20; s++) {
+        const race = new Race(ALL.slice(0, n), s * 7919 + n).runToEnd();
+        expect(race.forcedEnd).toBe(false);
+        const rows = buildResults(race);
+        expect(rows.length).toBe(n);
+        for (let i = 1; i < rows.length; i++) expect(rows[i].timeMs).toBeGreaterThanOrEqual(rows[i - 1].timeMs);
+      }
+    }
+  });
+
+  it('장애물은 10m 이후에만 생성', () => {
+    for (let s = 0; s < 50; s++) {
+      const race = new Race(ALL, s);
+      for (const lane of race.obstaclesByLane) for (const ob of lane) expect(ob.pos).toBeGreaterThan(10);
+    }
+  });
+
+  it('결승선 통과 시각 보간 (같은 프레임 통과도 정밀 비교)', () => {
+    const race = new Race(['yappu', 'moya'], 1, cfgNoEvents);
+    race.obstaclesByLane.forEach((l) => (l.length = 0));
+    const a = r(race, 'yappu'), b = r(race, 'moya');
+    a.pos = 99.99; b.pos = 99.96; a.cds = [99, 99]; b.cds = [99, 99];
+    a.wobble = b.wobble = a.wobbleTarget = b.wobbleTarget = 0;
+    a.wobbleNext = b.wobbleNext = 999;
+    race.step();
+    expect(a.finished && b.finished).toBe(true);
+    expect(a.finishTime!).toBeLessThan(b.finishTime!);
+    expect(a.finishTime!).toBeGreaterThan(0);
+    expect(a.finishTime!).toBeLessThan(CONFIG.dt);
+  });
+
+  it('공동 순위 처리 (1,1,3)', () => {
+    const rows = assignRanks([{ timeMs: 100, rank: 0 }, { timeMs: 100, rank: 0 }, { timeMs: 120, rank: 0 }]);
+    expect(rows.map((x) => x.rank)).toEqual([1, 1, 3]);
+  });
+
+  it('필살기 게이지는 공개 상태에 포함되지 않음', () => {
+    const race = new Race(ALL, 3);
+    for (let i = 0; i < 600; i++) race.step();
+    const pub = race.getPublic()[0] as unknown as Record<string, unknown>;
+    expect('gauge' in pub).toBe(false);
+    expect(Object.keys(pub).some((k) => /gauge|ult/i.test(k))).toBe(false);
+  });
+
+  it('필살기 자동 발동 (경기당 최대 1회)', () => {
+    const race = new Race(ALL, 5).runToEnd();
+    const ults = race.events.filter((e) => e.type === 'ult');
+    expect(ults.length).toBeGreaterThan(0);
+    const per = new Map<number, number>();
+    ults.forEach((e) => per.set(e.actor!, (per.get(e.actor!) ?? 0) + 1));
+    for (const c of per.values()) expect(c).toBe(1);
+  });
+});
+
+describe('쿨타임·피격', () => {
+  it('피격 시 두 스킬 쿨타임 2초 추가 감소, 2초에 한 번만', () => {
+    const race = new Race(['yappu', 'moya'], 1);
+    const a = r(race, 'yappu');
+    a.cds = [8, 8];
+    race.t = 10;
+    registerHit(a, race.t, 'obstacle', CONFIG);
+    expect(a.cds).toEqual([6, 6]);
+    race.t = 11;
+    registerHit(a, race.t, 'opponent', CONFIG);
+    expect(a.cds).toEqual([6, 6]);
+    race.t = 12.1;
+    registerHit(a, race.t, 'opponent', CONFIG);
+    expect(a.cds).toEqual([4, 4]);
+  });
+
+  it('면역으로 막으면 쿨타임 감소/게이지 증가 없음', () => {
+    const race = new Race(['yappu', 'moya'], 1);
+    const a = r(race, 'yappu'), b = r(race, 'moya');
+    b.cds = [8, 8]; b.gauge = 0;
+    addEffect(b, race.t, 'immuneDebuff', 0, 2, 'skill');
+    expect(applyOpponentSlow(race, a, b, 0.3, 1)).toBe(false);
+    expect(b.cds).toEqual([8, 8]);
+    expect(b.gauge).toBe(0);
+    expect(race.events.some((e) => e.type === 'blocked')).toBe(true);
+  });
+
+  it('장애물 회피 시 쿨타임 추가 감소 없음, 피격 후 보호 시간', () => {
+    const race = new Race(['moya', 'yappu'], 1, cfgNoEvents);
+    const m = r(race, 'moya');
+    const lane = race.obstaclesByLane[m.lane];
+    lane.length = 0;
+    lane.push({ id: 1, lane: m.lane, pos: 20, len: 0, type: 'banana', state: 'idle' });
+    lane.push({ id: 2, lane: m.lane, pos: 21, len: 0, type: 'rock', state: 'idle' });
+    m.cds = [8, 8];
+    addEffect(m, race.t, 'autoDodge', 0, 1, 'skill');
+    crossObstacles(race, m, 19.9, 20.1);
+    expect(lane[0].state).toBe('dodged');
+    expect(m.cds).toEqual([8, 8]);
+    m.effects = [];
+    lane[0].state = 'idle';
+    crossObstacles(race, m, 19.9, 20.1);
+    expect(lane[0].state).toBe('hit');
+    expect(m.cds).toEqual([6, 6]);
+    crossObstacles(race, m, 20.9, 21.1);
+    expect(lane[1].state).toBe('protected');
+  });
+});
+
+describe('특수 스킬 결승선 보호', () => {
+  const setup = (ids: CharId[]) => {
+    const race = new Race(ids, 9, cfgNoEvents);
+    race.obstaclesByLane.forEach((l) => (l.length = 0));
+    return race;
+  };
+
+  it('월광 도약: 결승선 통과 불가 + 앞 캐릭터 바로 뒤까지만', () => {
+    const race = setup(['harunotsuki', 'moya']);
+    const h = r(race, 'harunotsuki'), m = r(race, 'moya');
+    h.pos = 95; m.pos = 50;
+    useSkill(race, h, h.def.ult, 'ult');
+    expect(h.pos).toBeLessThan(race.finishLine);
+    expect(h.finished).toBe(false);
+    h.pos = 40; m.pos = 45;
+    h.ultUsed = false;
+    useSkill(race, h, h.def.ult, 'ult');
+    expect(h.pos).toBeLessThan(45);
+    expect(h.pos).toBeGreaterThan(44);
+  });
+
+  it('결승골 슛: 돌진으로 결승선 통과 불가, 경로 장애물 파괴', () => {
+    const race = setup(['kkutinho', 'moya']);
+    const k = r(race, 'kkutinho');
+    race.obstaclesByLane[k.lane].push({ id: 1, lane: k.lane, pos: 96, len: 0, type: 'rock', state: 'idle' });
+    k.pos = 93;
+    useSkill(race, k, k.def.ult, 'ult');
+    expect(race.obstaclesByLane[k.lane][0].state).toBe('destroyed');
+    for (let i = 0; i < 20 && k.dash; i++) { race.step(); expect(k.finished).toBe(false); }
+    expect(k.pos).toBeLessThan(race.finishLine);
+  });
+
+  it('전세 역전: 위치 교환으로 완주 처리 없음, 완주자와 교환 불가', () => {
+    const race = setup(['kimokdok', 'moya', 'yappu']);
+    const o = r(race, 'kimokdok'), m = r(race, 'moya'), y = r(race, 'yappu');
+    y.finished = true; y.finishTime = 30; y.pos = 100;
+    m.pos = 99.9; o.pos = 60;
+    useSkill(race, o, o.def.ult, 'ult');
+    expect(o.pos).toBeCloseTo(99.9);
+    expect(m.pos).toBeCloseTo(60);
+    expect(o.finished).toBe(false);
+    expect(y.pos).toBe(100);
+  });
+
+  it('이미 완주한 캐릭터는 방해 대상 제외', () => {
+    const race = setup(['yappu', 'moya']);
+    const y = r(race, 'yappu'), m = r(race, 'moya');
+    m.finished = true; m.finishTime = 1; m.pos = 100; y.pos = 90;
+    useSkill(race, y, y.def.ult, 'ult');
+    expect(m.effects.length).toBe(0);
+    expect(race.events.some((e) => e.type === 'debuff' && e.target === m.index)).toBe(false);
+  });
+
+  it('여러 필살기 동시 발동해도 오류 없음', () => {
+    const race = new Race(ALL, 11);
+    for (let i = 0; i < 900; i++) race.step();
+    for (const x of race.runners) x.gauge = 100, x.ultReadyAt = 0;
+    for (const x of race.runners) if (!x.ultUsed) useSkill(race, x, x.def.ult, 'ult');
+    race.runToEnd();
+    expect(buildResults(race).length).toBe(10);
+  });
+});
+
+describe('결승선 이동', () => {
+  it('최대 1회, 150m 이하, 첫 완주 전에만, 실제 판정에 사용', () => {
+    const cfg = { ...CONFIG, finishMove: { ...CONFIG.finishMove, chancePerSecond: 50 } };
+    for (let s = 0; s < 30; s++) {
+      const race = new Race(ALL, s, cfg).runToEnd();
+      const moves = race.events.filter((e) => e.type === 'finishMove');
+      expect(moves.length).toBe(1);
+      expect(race.finishLine).toBeLessThanOrEqual(150);
+      const firstFinish = race.events.find((e) => e.type === 'finish')!;
+      expect(moves[0].t).toBeLessThanOrEqual(firstFinish.t);
+      for (const x of race.runners) expect(x.pos).toBe(race.finishLine);
+      expect(race.forcedEnd).toBe(false);
+    }
+  });
+});
+
+describe('순위 복사', () => {
+  it('참가자 전원 + 결승선 거리 + 공동 순위 표기', () => {
+    const race = new Race(['nanwony', 'kimokdok', 'yappu'], 77).runToEnd();
+    const rows = buildResults(race);
+    const text = formatCopyText(rows, race.finishLine);
+    expect(text).toContain('🏆 꾸한성 대환장 운동회');
+    expect(text).toContain(`📏 최종 결승선: ${race.finishLine}m`);
+    expect(text).toContain('👥 참가 인원: 3명');
+    expect(text).toContain('🥇 1등');
+    expect(text).not.toContain('모야');
+    const tie = formatCopyText(
+      [{ ...rows[0], rank: 1, timeMs: 30000 }, { ...rows[1], rank: 1, timeMs: 30000 }, { ...rows[2], rank: 3, timeMs: 31000 }], 100,
+    );
+    expect(tie).toContain('🥇 1등 ' + rows[1].name + ' - 30.000초 (공동)');
+    expect(tie).toContain('🥉 3등');
+  });
+});
+
+describe('AI 보류 규칙', () => {
+  it('대상이 없으면 방해 스킬 보류 (치과 가는 길)', () => {
+    const race = new Race(['yappu', 'moya'], 2, cfgNoEvents);
+    const y = r(race, 'yappu'), m = r(race, 'moya');
+    y.pos = 50; m.pos = 10; y.cds = [99, 0];
+    for (let i = 0; i < 120; i++) aiTick(race, y);
+    expect(y.stats.skillUses).toBe(0);
+  });
+});
+
+describe('필살기 발동 구조 (2차)', () => {
+  it('필살기를 못 쓰고 끝나는 경우가 존재하고, 경기당 최대 1회', () => {
+    let used = 0, total = 0;
+    for (let s = 0; s < 150; s++) {
+      const race = new Race(ALL, s * 31 + 7).runToEnd();
+      for (const x of race.runners) {
+        total++;
+        if (x.ultUsed) used++;
+        expect(race.events.filter((e) => e.type === 'ult' && e.actor === x.index).length).toBeLessThanOrEqual(1);
+      }
+    }
+    const rate = used / total;
+    expect(rate).toBeGreaterThan(0.6);
+    expect(rate).toBeLessThan(0.97);
+  });
+
+  it('결승선 6m 이내에서는 새로 발동하지 않음', () => {
+    const race = new Race(['yappu', 'moya'], 4, cfgNoEvents);
+    const y = r(race, 'yappu');
+    y.pos = race.finishLine - 5; y.gauge = 100; y.ultTrigger = 0; y.cds = [99, 99];
+    for (let i = 0; i < 600; i++) aiTick(race, y);
+    expect(y.ultUsed).toBe(false);
+  });
+
+  it('숨겨진 발동 지점은 공개 상태에 없음', () => {
+    const pub = new Race(ALL, 1).getPublic()[0] as unknown as Record<string, unknown>;
+    expect(Object.keys(pub).some((k) => /trigger|gauge|ult/i.test(k))).toBe(false);
+  });
+});
+
+describe('이미지 매니페스트', () => {
+  it('10명 × 4종 WebP 표준 파일명 (_run/_skill/_ultimate/_victory)', async () => {
+    const m = await import('../src/game/images');
+    for (const id of ALL) {
+      const want = { run: `${id}_run.webp`, skill: `${id}_skill.webp`, ultimate: `${id}_ultimate.webp`, victory: `${id}_victory.webp` };
+      expect(m.CHARACTER_IMAGES[id]).toEqual(want);
+    }
+    expect(m.imageCandidates('kkutinho', 'victory')).toEqual(['/characters/kkutinho_victory.webp', '/characters/kkutinho_run.webp']);
+    expect(m.assetUrl(m.STADIUM.night)).toBe('/backgrounds/stadium_night.webp');
+    expect(Object.keys(m.OBSTACLE_IMAGES).sort()).toEqual(['banana', 'gust', 'pit', 'rock', 'zone']);
+    expect(Object.keys(m.EFFECT_IMAGES).length).toBe(13);
+    expect(Object.keys(m.UI_IMAGES).length).toBe(18); // commentary_panel은 예시 문장 제거본 사용
+    expect(m.GATE_IMAGES).toEqual({ start: 'gates/race_start.webp', finish: 'gates/race_finish.webp' });
+    expect(m.imageCandidates('yappu', 'ultimate')).toEqual(['/characters/yappu_ultimate.webp', '/characters/yappu_run.webp']);
+  });
+  it('포즈 누락 시 run, 전부 없으면 후보 없음(임시 캐릭터)', async () => {
+    const m = await import('../src/game/images');
+    const backup = m.CHARACTER_IMAGES.moya;
+    m.CHARACTER_IMAGES.moya = { run: 'moya_run.webp' };
+    expect(m.imageCandidates('moya', 'skill')).toEqual(['/characters/moya_run.webp']);
+    m.CHARACTER_IMAGES.moya = {};
+    expect(m.imageCandidates('moya', 'victory')).toEqual([]);
+    m.CHARACTER_IMAGES.moya = backup;
+  });
+});
