@@ -141,7 +141,6 @@ export class PinballScene extends Phaser.Scene {
   private finishedCount = 0;
   private unstuck = 0;
   private tickTimer = 0;
-  private followMode: 'first' | 'last';
   private started = false;
   private speed = 1;             // 배속 1·2·3
   private acc = 0;               // 실시간 누적(ms) × 배속
@@ -161,14 +160,13 @@ export class PinballScene extends Phaser.Scene {
   private skillSys!: PinballSkills; // 구슬 고유 스킬 6종 // 랜덤 방해 이벤트 (활성 최대 1개)
   private keepOrder: boolean;     // 설정 화면 '공 섞기' 순서를 출발 배치에 그대로 사용 (다시 하기는 false → 새로 섞음)
 
-  constructor(specs: BallSpec[], seed: number, hooks: PinballHooks, followMode: 'first' | 'last', mapId: MapId = 'basic', keepOrder = false) {
+  constructor(specs: BallSpec[], seed: number, hooks: PinballHooks, _followMode: 'first' | 'last', mapId: MapId = 'basic', keepOrder = false) {
     super('pinball');
     this.specs = specs;
     this.hooks = hooks;
     this.rng = new Rng(seed);
     this.seed = seed;
     this.mapRng = new Rng((seed ^ 0x9e3779b9) >>> 0); // 랜덤 맵 배치 전용 (공 출발 배치 난수와 분리)
-    this.followMode = followMode;
     this.mapId = mapId;
     this.keepOrder = keepOrder;
     this.theme = mapInfo(mapId).theme;
@@ -505,19 +503,34 @@ export class PinballScene extends Phaser.Scene {
     return true;
   }
 
-  /** 카메라: 우승 방식에 맞춰 선두(먼저 도착) 또는 꼴찌(마지막 도착) 공을 따라감 */
+  /**
+   * 카메라(세로만): 출발 구역 → 선두 공(미완주 중 가장 아래) 추적 → 첫 완주 후 결승선 부근 고정. 우승 방식과 무관하게 동일.
+   * 추적 대상 교체는 0.4초 안정화(새 선두가 120px 이상 앞서면 즉시), 이동은 지수 감쇠 + 속도 상한 → 순간이동·역주행에도 화면이 튀지 않음
+   */
+  private camTarget: BallState | null = null;
+  private camCand: BallState | null = null;
+  private camCandSince = 0;
   private updateCamera(delta: number): void {
     if (!this.running && this.elapsed === 0) return;
-    let lo = Infinity, hi = -Infinity;
-    for (const b of this.balls) {
-      if (b.removed) continue;
-      if (b.go.y < lo) lo = b.go.y;
-      if (b.go.y > hi) hi = b.go.y;
-    }
-    if (lo === Infinity) { lo = hi = FINISH_Y; }
-    const focus = this.followMode === 'first' ? hi : lo;
-    const target = Phaser.Math.Clamp(focus - PB_VIEW_H * 0.45, 0, H - PB_VIEW_H);
     const cam = this.cameras.main;
-    cam.scrollY += (target - cam.scrollY) * (1 - Math.exp(-delta * 0.005));
+    const maxScroll = H - PB_VIEW_H;
+    let target: number;
+    if (this.finishedCount > 0) {
+      target = Phaser.Math.Clamp(FINISH_Y - PB_VIEW_H * 0.72, 0, maxScroll); // 깔때기·회전 막대·입구·판정선이 보이게 고정
+    } else {
+      let lead: BallState | null = null;
+      for (const b of this.balls) if (!b.removed && (!lead || b.go.y > lead.go.y)) lead = b;
+      if (!lead) return;
+      const cur = this.camTarget;
+      if (!cur || cur.removed) { this.camTarget = lead; this.camCand = null; }
+      else if (lead !== cur) {
+        if (lead !== this.camCand) { this.camCand = lead; this.camCandSince = this.elapsed; }
+        if (lead.go.y - cur.go.y > 120 || this.elapsed - this.camCandSince > 400) { this.camTarget = lead; this.camCand = null; }
+      } else this.camCand = null;
+      target = Phaser.Math.Clamp(this.camTarget!.go.y - PB_VIEW_H * 0.58, 0, maxScroll); // 선두가 화면 중앙보다 약간 아래 (출발 직후엔 0 → 출발 구역)
+    }
+    const step = (target - cam.scrollY) * (1 - Math.exp(-delta * 0.004));
+    const cap = 1.6 * delta; // 최대 1.6px/ms(게임 시간) — 공 최고 낙하 속도(≈0.9px/ms)보다 빠르고 순간이동 거리는 부드럽게
+    cam.scrollY += Phaser.Math.Clamp(step, -cap, cap);
   }
 }
