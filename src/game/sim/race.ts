@@ -22,6 +22,8 @@ export class Race {
   stepCount = 0;
   finishLine: number;
   finishMoved = false;
+  /** 이번 경기 결승선 이벤트 결과·발동 지점 (화면 비공개). 단축이 안전 조건으로 취소되면 cancelled */
+  finishPlan: { to: number; at: number; cancelled: boolean } = { to: 0, at: 0, cancelled: false };
   finishedCount = 0;
   cheerCount = 0;
   nextId = 10000;
@@ -56,6 +58,10 @@ export class Race {
       return r;
     });
     this.obstaclesByLane = generateObstacles(this.rng, ids.length, cfg);
+    const fm = cfg.finishMove;
+    const to = this.rng.weighted(fm.outcomes.filter((o) => o.to <= cfg.maxFinish), (o) => o.w).to;
+    const win = to < cfg.baseFinish ? fm.shortenWindow : fm.extendWindow;
+    this.finishPlan = { to, at: this.rng.range(win[0], win[1]), cancelled: false };
     this.emit({ type: 'start' });
   }
 

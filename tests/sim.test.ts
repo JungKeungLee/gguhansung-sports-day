@@ -11,7 +11,7 @@ import type { CharId } from '../src/game/types';
 
 const ALL = CHARACTERS.map((c) => c.id);
 const r = (race: Race, id: CharId) => race.runners.find((x) => x.def.id === id)!;
-const cfgNoEvents = { ...CONFIG, finishMove: { ...CONFIG.finishMove, chancePerSecond: 0 }, cheer: { ...CONFIG.cheer, chancePerSecond: 0 } };
+const cfgNoEvents = { ...CONFIG, finishMove: { ...CONFIG.finishMove, outcomes: [{ to: 100, w: 1 }] }, cheer: { ...CONFIG.cheer, chancePerSecond: 0 } };
 
 describe('참가 선택', () => {
   it('1명 시작 불가 / 2명·10명 시작 가능', () => {
@@ -206,17 +206,67 @@ describe('특수 스킬 결승선 보호', () => {
 });
 
 describe('결승선 이동', () => {
-  it('최대 1회, 150m 이하, 첫 완주 전에만, 실제 판정에 사용', () => {
-    const cfg = { ...CONFIG, finishMove: { ...CONFIG.finishMove, chancePerSecond: 50 } };
-    for (let s = 0; s < 30; s++) {
-      const race = new Race(ALL, s, cfg).runToEnd();
-      const moves = race.events.filter((e) => e.type === 'finishMove');
-      expect(moves.length).toBe(1);
-      expect(race.finishLine).toBeLessThanOrEqual(150);
-      const firstFinish = race.events.find((e) => e.type === 'finish')!;
-      expect(moves[0].t).toBeLessThanOrEqual(firstFinish.t);
-      for (const x of race.runners) expect(x.pos).toBe(race.finishLine);
-      expect(race.forcedEnd).toBe(false);
+  const forced = (to: number) => ({ ...CONFIG, finishMove: { ...CONFIG.finishMove, outcomes: [{ to, w: 1 }] } });
+
+  // 이벤트별 강제 실행: 100(변경 없음)·120·130·150·70
+  for (const to of [100, 120, 130, 150, 70]) {
+    it(`${to}m: 최대 1회, 첫 완주 전 발동, 실제 판정에 사용, 기록 정렬`, () => {
+      for (let s = 0; s < 25; s++) {
+        const ids = ALL.slice(0, 2 + (s % 9));
+        const race = new Race(ids, s * 97 + to, forced(to)).runToEnd();
+        const moves = race.events.filter((e) => e.type === 'finishMove');
+        expect(race.forcedEnd).toBe(false);
+        expect(race.finishLine).toBe(to);
+        expect(moves.length).toBe(to === 100 ? 0 : 1);
+        if (moves.length) {
+          expect(moves[0].from).toBe(100);
+          expect(moves[0].to).toBe(to);
+          expect(moves[0].t).toBeLessThanOrEqual(race.events.find((e) => e.type === 'finish')!.t);
+        }
+        for (const x of race.runners) expect(x.pos).toBe(to);
+        const rows = buildResults(race);
+        expect(rows.length).toBe(ids.length);
+        for (let i = 1; i < rows.length; i++) expect(rows[i].timeMs).toBeGreaterThanOrEqual(rows[i - 1].timeMs);
+      }
+    });
+  }
+
+  it('70m 단축: 발동 순간 모든 선수가 70m보다 8m 이상 뒤, 위험하면 취소', () => {
+    for (let s = 0; s < 40; s++) {
+      const race = new Race(ALL, s, forced(70));
+      let checked = false;
+      while (!race.done) {
+        const before = race.events.length;
+        race.step();
+        const e = race.events.slice(before).find((x) => x.type === 'finishMove');
+        if (e) {
+          checked = true;
+          for (const x of race.runners) expect(x.pos).toBeLessThan(70);
+          expect(Math.max(...race.runners.map((x) => x.prevPos))).toBeLessThanOrEqual(70 - CONFIG.finishMove.shortenSafety);
+        }
+      }
+      expect(checked).toBe(true);
+    }
+    // 안전 조건 위반 상황 강제: 선두가 이미 66m → 단축 취소, 100m 유지
+    const race = new Race(['yappu', 'moya'], 1, forced(70));
+    race.runners[0].pos = 66; race.finishPlan.at = 0;
+    race.step();
+    expect(race.finishPlan.cancelled).toBe(true);
+    expect(race.finishLine).toBe(100);
+    race.runToEnd();
+    expect(race.events.some((e) => e.type === 'finishMove')).toBe(false);
+  });
+
+  it('결과 분포: 5종 모두 발생, 특정 거리 편중 없음 (2,000경기)', () => {
+    const cnt: Record<number, number> = {};
+    for (let s = 0; s < 2000; s++) {
+      const r = new Race(ALL, (s * 2654435761) >>> 0);
+      cnt[r.finishPlan.to] = (cnt[r.finishPlan.to] ?? 0) + 1;
+    }
+    for (const o of CONFIG.finishMove.outcomes) {
+      const total = CONFIG.finishMove.outcomes.reduce((a, b) => a + b.w, 0);
+      expect(cnt[o.to] / 2000).toBeGreaterThan(o.w / total - 0.04);
+      expect(cnt[o.to] / 2000).toBeLessThan(o.w / total + 0.04);
     }
   });
 });

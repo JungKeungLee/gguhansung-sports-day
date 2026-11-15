@@ -36,10 +36,10 @@ async function copyText(text: string): Promise<boolean> {
   }
 }
 
-export function ResultScreen({ race, onReplay, onMenu }: { race: Race; onReplay: () => void; onMenu: () => void }) {
+export function ResultScreen({ race, onReplay, onMenu, onHome }: { race: Race; onReplay: () => void; onMenu: () => void; onHome: () => void }) {
   const rows = useMemo(() => buildResults(race), [race]);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
-  useEffect(() => { sfx.fanfare(); }, []);
+  useEffect(() => { sfx.winner(); }, []); // 시상식 BGM(victory)과 함께 1회
 
   // 시상대 배치: 완주 순서(동기록이면 기존 순위 판정과 같은 정렬) 1~3번째를 중앙·왼쪽·오른쪽 단상에
   const top3 = rows.slice(0, 3);
@@ -62,7 +62,7 @@ export function ResultScreen({ race, onReplay, onMenu }: { race: Race; onReplay:
           <div className="rc-body">
             <div className="rc-label">🏆 우승</div>
             <div className="rc-winner">{winners.map((w) => w.name).join(', ')}</div>
-            <div className="rc-line">📏 결승선 <b>{race.finishLine}m</b>{race.finishMoved && <span className="moved-tag">이동!</span>}</div>
+            <div className="rc-line">📏 결승선 <b>{race.finishLine}m</b>{race.finishMoved && <span className={`moved-tag${race.finishLine < race.cfg.baseFinish ? ' shorten' : ''}`}>{race.finishLine < race.cfg.baseFinish ? '단축!' : '연장!'}</span>}</div>
             <div className="rc-line">👥 참가 <b>{rows.length}명</b></div>
           </div>
           <div className="rc-foot">꾸한성 대환장 운동회</div>
@@ -114,6 +114,7 @@ export function ResultScreen({ race, onReplay, onMenu }: { race: Race; onReplay:
           <button className="btn primary big" onClick={onCopy}>📋 순위 복사</button>
           <button className="btn big" onClick={onReplay}>🔁 다시 하기</button>
           <button className="btn ghost big" onClick={onMenu}>👥 멤버 다시 선택</button>
+          <button className="btn ghost big" onClick={onHome}>🏠 메인 화면</button>
         </div>
       </div>
       {msg && <div className={`copy-msg ${msg.ok ? 'ok' : 'fail'}`}>{msg.text}</div>}

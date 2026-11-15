@@ -6,8 +6,9 @@ import type { CharId, PublicRunner, RaceEvent } from '../game/types';
 import { RaceScene, VIEW_H, VIEW_W } from '../scenes/RaceScene';
 import { Avatar } from './Avatar';
 import { type Comment, commentFor } from './commentary';
-import { isMuted, setMuted, sfx } from './sound';
-import { EFFECT_IMAGES, type StadiumTheme, assetUrl, uiUrl } from '../game/images';
+import { sfx } from './sound';
+import { useSoundSettings } from './SoundPanel';
+import { EFFECT_IMAGES, FINISH_LABEL, type StadiumTheme, assetUrl, finishKind, uiUrl } from '../game/images';
 import { UiImg } from './UiImg';
 
 interface Cutin { id: number; actor: number; name: string; line: string }
@@ -17,15 +18,15 @@ interface Notice { id: number; kind: 'skill' | 'overtake' | 'first'; who: string
 
 const CUTIN_MS = 1600;
 
-export function RaceScreen({ lineup, seed, theme, onDone, onExit }: {
-  lineup: CharId[]; seed: number; theme: StadiumTheme; onDone: (race: Race) => void; onExit: () => void;
+export function RaceScreen({ lineup, seed, theme, onDone, onExit, onSettings }: {
+  lineup: CharId[]; seed: number; theme: StadiumTheme; onDone: (race: Race) => void; onExit: () => void; onSettings: () => void;
 }) {
   const race = useMemo(() => new Race(lineup, seed), [lineup, seed]);
   const defs = useMemo(() => race.runners.map((r) => r.def), [race]);
   const hostRef = useRef<HTMLDivElement>(null);
   const speedRef = useRef(1);
   const [speed, setSpeed] = useState(1);
-  const [muted, setMutedState] = useState(isMuted());
+  const { muted } = useSoundSettings();
   const [pub, setPub] = useState<PublicRunner[]>([]);
   const [time, setTime] = useState(0);
   const [finishLine, setFinishLine] = useState(race.finishLine);
@@ -101,11 +102,11 @@ export function RaceScreen({ lineup, seed, theme, onDone, onExit }: {
         case 'obstacleDodge': case 'obstacleImmune': play('dodge'); break;
         case 'debuff': case 'push': case 'swap': play('debuff'); break;
         case 'finish':
-          play('finish', 60);
+          if (!firstShown.current) { sfx.winner(); } else play('finish', 60); // 1등 골인은 finish.mp3
           if (!firstShown.current) { firstShown.current = true; pushNotice('first', e.actor!, `${e.value!.toFixed(3)}초 골인!`, 2600); }
           break;
         case 'cheer': play('cheer'); break;
-        case 'leadChange': setLeaderFlash((x) => x + 1); pushNotice('overtake', e.actor!, '선두로 올라섭니다!'); break;
+        case 'leadChange': play('overtake', 0); setLeaderFlash((x) => x + 1); pushNotice('overtake', e.actor!, '선두로 올라섭니다!'); break;
         case 'finishMove':
           play('finishMove', 0);
           setFinishLine(e.to!);
@@ -127,7 +128,8 @@ export function RaceScreen({ lineup, seed, theme, onDone, onExit }: {
     const scene = new RaceScene(race, {
       onCountdown: (n) => {
         setCount(n);
-        if (n > 0) sfx.count(); else { sfx.go(); setTimeout(() => setCount(null), 700); }
+        // countdown.mp3(약 3초)는 3이 뜰 때 1회 재생해 3·2·1 표시와 맞추고, GO에서 start.mp3
+        if (n === 3) sfx.countdown(); else if (n === 0) { sfx.go(); setTimeout(() => setCount(null), 700); }
       },
       onEvents: (evs) => handlerRef.current(evs),
       onSnapshot: (p, t, fl) => { setPub(p); setTime(t); setFinishLine(fl); },
@@ -169,7 +171,7 @@ export function RaceScreen({ lineup, seed, theme, onDone, onExit }: {
       <header className="race-header">
         <div className="race-title">꾸한성 대환장 운동회</div>
         <div className="race-clock">⏱ {time.toFixed(2)}<small>s</small></div>
-        <div className={`race-dist${race.finishMoved ? ' moved' : ''}`}>🏁 결승선 {finishLine}m</div>
+        <div className={`race-dist${race.finishMoved ? ` moved ${finishLine < race.cfg.baseFinish ? 'shorten' : ''}` : ''}`}>🏁 결승선 {finishLine}m</div>
         <div className="remain-badge" title="선두 기준 결승선까지 남은 거리">
           <UiImg name="distance" />
           <span className="remain-num">{remain}m</span>
@@ -182,9 +184,8 @@ export function RaceScreen({ lineup, seed, theme, onDone, onExit }: {
               <button key={v} className={`sp-btn sp${v}${speed === v ? ' on' : ''}`} aria-label={`${v}배속`} aria-pressed={speed === v}
                 onClick={() => { speedRef.current = v; setSpeed(v); }} />
             ))}
-            {/* 이미지의 '설정' 버튼 자리 = 효과음 켜기/끄기 */}
-            <button className={`sp-btn sp3${muted ? ' on' : ''}`} aria-label={muted ? '효과음 켜기' : '효과음 끄기'}
-              onClick={() => { setMuted(!muted); setMutedState(!muted); }}>{muted && <span className="sp-mute">🔇</span>}</button>
+            {/* 이미지의 '설정' 버튼 자리 = 사운드 설정창 (경기는 계속 진행) */}
+            <button className="sp-btn sp3" aria-label="사운드 설정" onClick={onSettings}>{muted && <span className="sp-mute">🔇</span>}</button>
           </div>
           <button className="btn small ghost" onClick={onExit}>나가기</button>
         </div>
@@ -218,9 +219,12 @@ export function RaceScreen({ lineup, seed, theme, onDone, onExit }: {
       )}
 
       {banner && (
-        <div className="finish-change">
-          <UiImg name="finishChange" fallback={<div className="event-banner">🏁 결승선이 도망갑니다!</div>} />
-          <span className="fc-value">{banner.from}m → {banner.to}m</span>
+        <div className={`finish-change ${finishKind(banner.from, banner.to)}`}>
+          <div className="fc-inner">
+            <UiImg name="finishChange" fallback={<div className="event-banner">🏁 결승선 변경!</div>} />
+            <span className="fc-tag">{FINISH_LABEL[finishKind(banner.from, banner.to)]}</span>
+            <span className="fc-value">{banner.from}m → {banner.to}m</span>
+          </div>
         </div>
       )}
 

@@ -2,7 +2,7 @@
 import Phaser from 'phaser';
 import type { Race } from '../game/sim/race';
 import {
-  EFFECT_IMAGES, type EffectName, GATE_IMAGES, OBSTACLE_IMAGES, POSES, type Pose, STADIUM, type StadiumTheme, assetUrl, imageUrl,
+  EFFECT_IMAGES, type EffectName, GATE_IMAGES, OBSTACLE_IMAGES, finishKind, isFlipped, POSES, type Pose, STADIUM, type StadiumTheme, assetUrl, imageUrl,
 } from '../game/images';
 import type { CharId, FxKey, Obstacle, ObstacleType, PublicRunner, RaceEvent } from '../game/types';
 
@@ -374,7 +374,7 @@ export class RaceScene extends Phaser.Scene {
     const body = this.add.container(0, 0);
     let img: Phaser.GameObjects.Image | null = null;
     if (this.textures.exists(texKey(r.def.id, 'run'))) {
-      img = this.add.image(0, -R * 0.2, texKey(r.def.id, 'run'));
+      img = this.add.image(0, -R * 0.2, texKey(r.def.id, 'run')).setFlipX(isFlipped(r.def.id, 'run'));
       this.fitImage(img);
       body.add(img);
     } else {
@@ -415,6 +415,7 @@ export class RaceScene extends Phaser.Scene {
     const key = this.textures.exists(texKey(id, pose)) ? texKey(id, pose) : texKey(id, 'run');
     v.pose = pose;
     v.img.setTexture(key);
+    v.img.setFlipX(isFlipped(id, key === texKey(id, pose) ? pose : 'run')); // 이미지 방향만 반전, 위치·판정 무관
     this.fitImage(v.img);
   }
 
@@ -722,7 +723,16 @@ export class RaceScene extends Phaser.Scene {
             label.setText(this.finishVis.getData('gate') ? `${Math.round(this.finishVisM)}m` : `FINISH ${Math.round(this.finishVisM)}m`);
           },
         });
-        this.cameras.main.shake(400, 0.006);
+        // 단축(청록)과 연장(주황, 150m는 금색)을 색·문구로 구분
+        const kind = finishKind(e.from!, e.to!);
+        const col = kind === 'shorten' ? [60, 220, 255] : kind === 'mega' ? [255, 200, 40] : [255, 110, 40];
+        this.cameras.main.flash(260, col[0], col[1], col[2], false);
+        this.cameras.main.shake(kind === 'mega' ? 600 : 400, kind === 'mega' ? 0.009 : 0.006);
+        this.time.delayedCall(900, () => this.popText(
+          xOf(e.to!), this.trackTop - 8,
+          kind === 'shorten' ? `⚡ ${e.to}m 단축!` : kind === 'mega' ? `💥 ${e.to}m 대연장!` : `🔥 ${e.to}m 연장!`,
+          kind === 'shorten' ? '#7ff3ff' : '#ffd54f', 26,
+        ));
         break;
       }
       case 'finish': {

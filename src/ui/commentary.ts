@@ -31,7 +31,12 @@ export function commentFor(e: RaceEvent, defs: CharDef[]): Omit<Comment, 'id'> |
       ? { t: e.t, text: `🧠 선두 ${a}, 교환 대신 전력 질주!`, tone: 'normal' }
       : { t: e.t, text: `🔄 ${a} ↔ ${b} 위치가 뒤바뀌었습니다!!`, tone: 'ult' };
     case 'trapSet': return null;
-    case 'finishMove': return { t: e.t, text: `🏁 결승선이 도망갑니다! ${e.from}m → ${e.to}m!!`, tone: 'event' };
+    case 'finishMove': return {
+      t: e.t, tone: 'event',
+      text: e.to! < e.from!
+        ? `⚡ 결승선이 다가옵니다! ${e.from}m → ${e.to}m 단축!!`
+        : e.to! >= 150 ? `💥 대연장! 결승선이 멀리 도망갑니다! ${e.from}m → ${e.to}m!!` : `🏁 결승선이 도망갑니다! ${e.from}m → ${e.to}m 연장!`,
+    };
     case 'cheer': return { t: e.t, text: `👏 관중석 응원! 꼴찌 ${a}에게 힘이 납니다!`, tone: 'event' };
     case 'leadChange': return { t: e.t, text: `🔥 ${a}, 선두로 올라섭니다!`, tone: 'event' };
     case 'finish': return { t: e.t, text: `🏃 ${a} 결승선 통과! (${e.value!.toFixed(3)}초)`, tone: 'finish' };

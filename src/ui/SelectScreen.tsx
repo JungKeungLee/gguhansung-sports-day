@@ -5,8 +5,8 @@ import { Avatar } from './Avatar';
 import type { StadiumTheme } from '../game/images';
 import { MAX_PLAYERS, MIN_PLAYERS, canStart, toggleSelect } from './selection';
 
-export function SelectScreen({ initial, onStart, theme, onTheme }: {
-  initial: CharId[]; onStart: (ids: CharId[]) => void; theme: StadiumTheme; onTheme: (t: StadiumTheme) => void;
+export function SelectScreen({ initial, onStart, theme, onTheme, onHome }: {
+  initial: CharId[]; onStart: (ids: CharId[]) => void; theme: StadiumTheme; onTheme: (t: StadiumTheme) => void; onHome: () => void;
 }) {
   const [selected, setSelected] = useState<CharId[]>(initial);
   const ok = canStart(selected);
@@ -65,6 +65,7 @@ export function SelectScreen({ initial, onStart, theme, onTheme }: {
           ))}
         </div>
         <div className="btns">
+          <button className="btn ghost" onClick={onHome}>← 메인</button>
           <button className="btn ghost" onClick={() => setSelected(CHARACTERS.map((c) => c.id))}>전체 선택</button>
           <button className="btn ghost" onClick={() => setSelected([])}>전체 해제</button>
           <button className="btn primary big" disabled={!ok} onClick={() => onStart(selected)}>

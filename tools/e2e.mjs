@@ -15,7 +15,7 @@ const errors = [];
 
 const CASES = [
   { w: 1920, h: 1080, theme: '낮', cards: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9], seed: 12345, full: true },
-  { w: 1366, h: 768, theme: '야간', cards: [0, 1, 2, 3, 4], seed: 3, speed2: true }, // 결승선 100→150m
+  { w: 1366, h: 768, theme: '야간', cards: [0, 1, 2, 3, 9], seed: 7, speed2: true }, // 다뮤 포함, 결승선 100→150m
   { w: 2560, h: 1440, theme: '야간', cards: [6, 7], seed: 77, speed2: true },        // 2명 → 3등 빈자리
 ];
 
@@ -34,6 +34,7 @@ try {
     page.on('pageerror', (e) => errors.push(`${tag}: ${e.message}`));
     page.on('console', (m) => { if (m.type() === 'error' || m.type() === 'warning') errors.push(`${tag} ${m.type()}: ${m.text()}`); });
     await page.goto(`${url}?seed=${c.seed}`);
+    await page.getByRole('button', { name: /100m 달리기/ }).click(); // 메인 화면 → 캐릭터 선택
     const start = page.getByRole('button', { name: /경기 시작/ });
     if (c.full) {
       await page.locator('.char-card').nth(0).click();
@@ -52,7 +53,7 @@ try {
     await page.waitForTimeout(c.full ? 9000 : 5000);
     await page.screenshot({ path: `${out}/${tag}-race.png` });
     log(`${tag}: FPS ${(await fpsOf(page)).toFixed(1)}, 게이지 노출 ${/gauge|게이지/i.test(await page.content())}`);
-    if (c.seed === 3) {
+    if (c.seed === 7) {
       await page.locator('.finish-change').waitFor({ timeout: 40000 });
       await page.waitForTimeout(1200);
       await page.screenshot({ path: `${out}/${tag}-finishmove.png` });

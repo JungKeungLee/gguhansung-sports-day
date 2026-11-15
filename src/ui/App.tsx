@@ -5,10 +5,13 @@ import type { Race } from '../game/sim/race';
 import { SelectScreen } from './SelectScreen';
 import { RaceScreen } from './RaceScreen';
 import { ResultScreen } from './ResultScreen';
-import { initAudio } from './sound';
+import { type BgmName, initAudio, installAudioUnlock, playBgm } from './sound';
+import { HomeScreen } from './HomeScreen';
+import { SoundPanel } from './SoundPanel';
 import type { StadiumTheme } from '../game/images';
 
 type Screen =
+  | { kind: 'home' }
   | { kind: 'select' }
   | { kind: 'race'; lineup: CharId[]; seed: number; key: number }
   | { kind: 'result'; race: Race; lineup: CharId[] };
@@ -32,7 +35,14 @@ function seedFromUrl(): number | null {
 
 export function App() {
   const scale = useStageScale();
-  const [screen, setScreen] = useState<Screen>({ kind: 'select' });
+  const [screen, setScreen] = useState<Screen>({ kind: 'home' });
+  const [soundOpen, setSoundOpen] = useState(false);
+  useEffect(() => { installAudioUnlock(); }, []);
+  // 화면별 BGM: 메인·선택=main(유지), 경기=race, 시상식=victory
+  useEffect(() => {
+    const map: Record<Screen['kind'], BgmName> = { home: 'main', select: 'main', race: 'race', result: 'victory' };
+    playBgm(map[screen.kind]);
+  }, [screen.kind]);
   const [lastLineup, setLastLineup] = useState<CharId[]>([]);
   const [theme, setTheme] = useState<StadiumTheme>('day'); // 기본: 낮 경기장
 
@@ -45,13 +55,17 @@ export function App() {
   return (
     <div className="viewport">
       <div className="stage" style={{ transform: `translate(-50%, -50%) scale(${scale})` }}>
-        {screen.kind === 'select' && <SelectScreen initial={lastLineup} onStart={start} theme={theme} onTheme={setTheme} />}
+        {screen.kind === 'home' && <HomeScreen onRun100={() => setScreen({ kind: 'select' })} onSettings={() => setSoundOpen(true)} />}
+        {screen.kind === 'select' && (
+          <SelectScreen initial={lastLineup} onStart={start} theme={theme} onTheme={setTheme} onHome={() => setScreen({ kind: 'home' })} />
+        )}
         {screen.kind === 'race' && (
           <RaceScreen
             key={screen.key}
             lineup={screen.lineup}
             seed={screen.seed}
             theme={theme}
+            onSettings={() => setSoundOpen(true)}
             onExit={() => setScreen({ kind: 'select' })}
             onDone={(race) => setScreen({ kind: 'result', race, lineup: screen.lineup })}
           />
@@ -61,8 +75,10 @@ export function App() {
             race={screen.race}
             onReplay={() => start(screen.lineup)}
             onMenu={() => setScreen({ kind: 'select' })}
+            onHome={() => setScreen({ kind: 'home' })}
           />
         )}
+        {soundOpen && <SoundPanel onClose={() => setSoundOpen(false)} />}
       </div>
     </div>
   );

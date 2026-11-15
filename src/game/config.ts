@@ -64,14 +64,18 @@ export const CONFIG = {
   },
 
   // 결승선 이동 이벤트
+  // 결승선 이벤트: 경기 시작 시 결과를 무작위 결정(비공개) → 선두가 발동 지점을 지날 때 실제 변경 (경기당 최대 1회)
   finishMove: {
-    chancePerSecond: 0.03,
-    leaderRange: [45, 90] as [number, number],
-    options: [
-      { to: 120, w: 40 },
-      { to: 130, w: 35 },
-      { to: 150, w: 25 },
+    outcomes: [
+      { to: 100, w: 40 },  // 기본 경기 (변경 없음)
+      { to: 120, w: 18 },  // 연장 1
+      { to: 130, w: 15 },  // 연장 2
+      { to: 150, w: 12 },  // 대연장
+      { to: 70, w: 15 },   // 단축
     ],
+    extendWindow: [45, 85] as [number, number],  // 연장: 선두 위치 구간 내 무작위 지점에서 발동
+    shortenWindow: [30, 55] as [number, number], // 단축: 70m보다 충분히 앞에서 발동
+    shortenSafety: 8,  // 단축 시 모든 선수가 새 결승선보다 이 거리(m) 이상 뒤에 있어야 함, 아니면 취소
   },
 
   // 관중 응원 이벤트 (최하위권 가속)

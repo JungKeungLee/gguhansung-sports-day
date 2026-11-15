@@ -84,6 +84,16 @@ export type EffectName = keyof typeof EFFECT_IMAGES;
 /** public 기준 상대 경로 → 배포 경로 */
 export const assetUrl = (path: string) => baseUrl() + path;
 
+// ───────────── 좌우 반전 (원본 그림이 왼쪽을 보는 캐릭터) ─────────────
+/** 다른 캐릭터는 모두 오른쪽(진행 방향)을 봄. 원본이 왼쪽을 보는 포즈만 화면에서 좌우 반전 (위치·판정 무관) */
+export const FLIP_X: Partial<Record<CharId, Pose[]>> = { damyu: ['run', 'skill', 'ultimate'] };
+export const isFlipped = (id: CharId, pose: Pose) => !!FLIP_X[id]?.includes(pose);
+
+/** 결승선 이벤트 종류 (화면 연출 구분용) */
+export type FinishKind = 'shorten' | 'extend' | 'mega';
+export const finishKind = (from: number, to: number): FinishKind => (to < from ? 'shorten' : to >= 150 ? 'mega' : 'extend');
+export const FINISH_LABEL: Record<FinishKind, string> = { shorten: '⚡ 결승선 단축!', extend: '🔥 결승선 연장!', mega: '💥 대연장!!' };
+
 // ───────────── 게이트·관전 UI 에셋 ─────────────
 export const GATE_IMAGES = { start: 'gates/race_start.webp', finish: 'gates/race_finish.webp' } as const;
 
