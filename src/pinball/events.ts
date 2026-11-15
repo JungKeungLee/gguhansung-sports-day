@@ -44,6 +44,8 @@ export interface EvHost {
   scene: Phaser.Scene; M: MatterLib; rng: Rng; balls: EvBall[]; obstacles: PreviewShape[];
   W: number; WALL: number; R: number; yMin: number; yMax: number; viewW: number;
   wake(b: EvBall): void;
+  /** 구슬 스킬 '충격 보호' 중이면 true → 이벤트 힘 30%로 감소, 순간이동·점프 무효 (기본 충돌은 그대로) */
+  shielded(b: EvBall, now: number): boolean;
   /** 기존 포털 순간이동 함수 재사용 (출구 근처 다른 공과 겹치면 false → 취소) */
   teleport(b: EvBall, fromX: number, fromY: number, x: number, y: number, color: number): boolean;
 }
@@ -114,7 +116,9 @@ export class PinballEvents {
     if (dy > e.reach || dy < -e.reach) return;
     const d2 = dx * dx + dy * dy;
     const v = b.go.body.velocity;
+    const sh = this.h.shielded(b, now);
     const set = (vx: number, vy: number, cap: number) => {
+      if (sh) { vx = v.x + (vx - v.x) * 0.3; vy = v.y + (vy - v.y) * 0.3; }
       const sp = Math.hypot(vx, vy);
       if (sp > cap) { vx = (vx / sp) * cap; vy = (vy / sp) * cap; }
       this.h.wake(b); b.go.setVelocity(vx, vy);
@@ -133,13 +137,13 @@ export class PinballEvents {
         const R = e.kind === 'blackhole' ? HOLE_R : MAG_R;
         if (d2 > R * R) return;
         const d = Math.sqrt(d2) || 1;
-        if (e.kind === 'blackhole' && d < 22) { if (ready) this.warp(b, now, e); return; }
+        if (e.kind === 'blackhole' && d < 22) { if (ready && !sh) this.warp(b, now, e); return; }
         const a = (e.kind === 'blackhole' ? 0.2 : 0.14) + 0.4 * (1 - d / R);
         set(v.x * 0.97 - (dx / d) * a, v.y * 0.97 - (dy / d) * a, e.kind === 'blackhole' ? 7 : 6);
         return;
       }
       case 'jump':
-        if (!ready || Math.abs(dx) > e.hw || dy < -(this.h.R + 12) || dy > this.h.R || v.y < -1) return;
+        if (sh || !ready || Math.abs(dx) > e.hw || dy < -(this.h.R + 12) || dy > this.h.R || v.y < -1) return;
         set(this.h.rng.range(-1.5, 1.5), -15, 15); // 위로 약 400px 상승 (이전 장애물 구간으로)
         this.ready.set(b.spec.id, now + 2000);
         this.ring(b.go.x, e.y, EVENT_INFO.jump.color, 34);
@@ -153,7 +157,7 @@ export class PinballEvents {
         set(v.x + e.dir * 0.32, v.y, 9);
         return;
       case 'warp':
-        if (ready && d2 < WARP_R * WARP_R) this.warp(b, now, e);
+        if (ready && !sh && d2 < WARP_R * WARP_R) this.warp(b, now, e);
         return;
       case 'hammer':
         if (Math.abs(b.go.x - (e.hx ?? e.x)) < 60 && Math.abs(dy) < 70 && v.x * v.x + v.y * v.y > 144) set(v.x, v.y, 12); // 충돌 강도 상한

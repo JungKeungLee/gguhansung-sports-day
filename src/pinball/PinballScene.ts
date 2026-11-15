@@ -3,6 +3,7 @@
 import Phaser from 'phaser';
 import { Rng } from '../game/rng';
 import { type BallRecord, type BallSpec, ballLabel, orderSameStep } from './entries';
+import { type SkillKind, type SkillState, SKILL_KINDS, PinballSkills, assignSkills } from './skills';
 import { type EventKind, EVENT_KINDS, MAP_EVENTS, PinballEvents } from './events';
 import { MAP_EXT, type MapApi, type MapId, type MapTheme, buildPinballMap, mapInfo, mapPhysics } from './maps';
 
@@ -118,6 +119,7 @@ interface BallState {
   record: BallRecord;
   portalReadyAt: number;
   removed: boolean;            // 완주 후 물리 바디 제거됨
+  skill: SkillState;           // 구슬 고유 스킬 (경기 중 고정)
 }
 
 interface Rotor { body: MatterJS.BodyType; omega: number; view: Phaser.GameObjects.Container }
@@ -155,7 +157,8 @@ export class PinballScene extends Phaser.Scene {
   private labels: { text: Phaser.GameObjects.Text; owner: number }[] = [];
   private lastFinishPass = 0;
   private seed: number;
-  private hazards!: PinballEvents; // 랜덤 방해 이벤트 (활성 최대 1개)
+  private hazards!: PinballEvents;
+  private skillSys!: PinballSkills; // 구슬 고유 스킬 6종 // 랜덤 방해 이벤트 (활성 최대 1개)
   private keepOrder: boolean;     // 설정 화면 '공 섞기' 순서를 출발 배치에 그대로 사용 (다시 하기는 false → 새로 섞음)
 
   constructor(specs: BallSpec[], seed: number, hooks: PinballHooks, followMode: 'first' | 'last', mapId: MapId = 'basic', keepOrder = false) {
@@ -181,6 +184,8 @@ export class PinballScene extends Phaser.Scene {
     this.buildMap();
     this.spawnBalls();
     this.initEvents();
+    this.skillSys = new PinballSkills({ scene: this, balls: this.balls, seed: this.seed, H, R: BALL_R, noSkillY: FIN_TOP - 60, rewindMaxY: FIN_TOP - 700, viewH: PB_VIEW_H });
+    if (import.meta.env.DEV && new URLSearchParams(location.search).get('pbev')) (window as unknown as { __pbSkills?: unknown }).__pbSkills = this.skillSys;
   }
 
   /** 랜덤 방해 이벤트 준비: 맵 배치 데이터(미리보기와 동일)로 안전 위치 판정, 전용 난수(기존 경기 난수 흐름과 분리) */
@@ -193,6 +198,7 @@ export class PinballScene extends Phaser.Scene {
       obstacles: pinballPreview(this.mapId, this.seed).shapes.slice(3), // 바깥 벽 3개 제외
       W, WALL, R: BALL_R, yMin: START_BOTTOM + 330, yMax: QUEUE_TOP - 120, viewW: PB_VIEW_W, // 출발 분산 구역 아래 ~ 결승 대기 구역 위
       wake: (b) => wake(b.go.body),
+      shielded: (b, now) => this.skillSys.shielded(b as unknown as BallState, now),
       teleport: (b, ax, ay, bx, by, color) => this.teleport(b as unknown as BallState, { ax, ay, bx, by, color }, false),
     }, MAP_EVENTS[this.mapId], forced);
     if (q) (window as unknown as { __pbEvents?: unknown; __pbScene?: unknown }).__pbEvents = this.hazards;
@@ -324,6 +330,9 @@ export class PinballScene extends Phaser.Scene {
     const x0 = W / 2 - ((cols - 1) * SP) / 2;
     const fontPx = n > 30 ? 11 : n > 15 ? 12 : 14;
     const order = this.specs.map((_, i) => i);
+    // 스킬: 참가 순서 기준 배정(전용 난수) → 공 섞기와 무관. QA용(개발 전용) ?pbskill=종류 → 전부 같은 스킬
+    const qs = import.meta.env.DEV ? new URLSearchParams(location.search).get('pbskill') : null;
+    const skills = assignSkills(n, this.seed, SKILL_KINDS.includes(qs as SkillKind) ? (qs as SkillKind) : null);
     if (!this.keepOrder) for (let i = order.length - 1; i > 0; i--) { const j = this.rng.int(i + 1); [order[i], order[j]] = [order[j], order[i]]; }
     order.forEach((specIdx, slot) => {
       const spec = this.specs[specIdx];
@@ -336,7 +345,7 @@ export class PinballScene extends Phaser.Scene {
         shape: { type: 'circle', radius: BALL_R },
       }) as unknown as MatterBall;
       this.balls.push({
-        spec, go, prevY: y, anchor: { x, y, t: 0 }, portalReadyAt: 0, removed: false,
+        spec, go, prevY: y, anchor: { x, y, t: 0 }, portalReadyAt: 0, removed: false, skill: skills[specIdx],
         record: { id: spec.id, name: spec.name, ordinal: spec.ordinal, label: ballLabel(spec), color: spec.color, finishTime: null, finishOrder: null, unstuckCount: 0, portals: 0 },
       });
     });
@@ -382,6 +391,7 @@ export class PinballScene extends Phaser.Scene {
     }
     for (const r of this.rotors) r.view.setRotation(r.body.angle);
     this.hazards?.draw(this.elapsed);
+    this.skillSys?.draw(this.elapsed);
     this.updateCamera(delta * this.speed);
     this.updateLabels();
     this.tickTimer -= delta;
@@ -422,6 +432,7 @@ export class PinballScene extends Phaser.Scene {
     const prevT = this.elapsed;
     this.elapsed += STEP_MS;
     this.hazards.tick(this.elapsed); // 랜덤 이벤트: 게임 시간 기준 발생·진행·종료
+    this.skillSys.beginStep();
     const crossed: BallState[] = [];
     const queueStalled = this.elapsed - this.lastFinishPass > 3000; // 결승 줄이 3초 이상 멈춤
     for (const b of this.balls) {
@@ -437,6 +448,7 @@ export class PinballScene extends Phaser.Scene {
       }
       b.prevY = y;
       this.hazards.affect(b, this.elapsed); // 이벤트 범위 안의 미완주 공만 (범위 밖은 즉시 반환)
+      this.skillSys.step(b, this.elapsed);  // 구슬 스킬 (쿨타임·결승 구역·휴면 판정 포함)
       // 포털 진입 (완주 전, 쿨타임·최대 횟수 제한)
       if (b.record.finishTime === null && this.portals.length && this.elapsed >= b.portalReadyAt && (b.record.portals ?? 0) < PORTAL_MAX) {
         const p = this.portals.find((q) => Math.abs(y - q.ay) < PORTAL_R && Math.hypot(x - q.ax, y - q.ay) < PORTAL_R);

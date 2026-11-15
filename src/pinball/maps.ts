@@ -96,7 +96,9 @@ function buildBasic(api: MapApi): MapBuildResult {
   xr.push(shelf(api, WALL - 4, 300, 4260, 15), shelf(api, W - WALL + 4, 500, 4260, -15)); // 가운데로 다시 모음
   const xrot = [{ x: 480, y: 3220 }, { x: 320, y: 3620 }];
   xrot.forEach((r, i) => api.rotor(r.x, r.y, 110, i % 2 ? -0.7 : 0.7, 2, 12));
-  pinField(api, 2920, 4360, { rects: xr, zones: xrot.map((r) => ({ x: r.x, y: r.y, r: 95 })), deflect: true });
+  // 합류 경사판 위쪽 끝 바로 위의 벽 반사판(4222, 좌우 1개씩)은 제외: 반사판 끝과 경사판 사이 틈에 공이 끼어 휴면하던 문제
+  const noDeflect = [{ x: WALL + 22, y: 4222, r: 4 }, { x: W - WALL - 22, y: 4222, r: 4 }];
+  pinField(api, 2920, 4360, { rects: xr, zones: [...xrot.map((r) => ({ x: r.x, y: r.y, r: 95 })), ...noDeflect], deflect: true });
   return {};
 }
 
@@ -250,9 +252,13 @@ const P_SPLIT: Pattern = (api, y0, y1) => {
   }
   api.bumper(400, y0 + 260, 18); api.bumper(400, y0 + 420, 18);
 };
+// 지그재그(개선): 긴 경사판 2개(520px)에 공이 일렬로 쌓이던 문제 → 짧은 경사판 4개 + 출구 3갈래 + 작은 풍차·범퍼
 const P_ZIGZAG: Pattern = (api, y0, y1) => {
-  shelf(api, 40, 560, y0 + 120, 12);
-  shelf(api, 760, 240, y0 + 330, -12);
+  shelf(api, 40, 250, y0 + 110, 14); shelf(api, 760, 550, y0 + 110, -14);   // 1단: 양 벽에서 가운데로, 가운데 300px 통로
+  api.rotor(400, y0 + 260, 120, api.rng.next() < 0.5 ? -1.2 : 1.2, 2, 12);  // 가운데 흐름을 좌우로 나눔
+  api.pin(300, y0 + 230); api.pin(500, y0 + 230);
+  shelf(api, 150, 330, y0 + 340, 12); shelf(api, 650, 470, y0 + 340, -12);  // 2단: 벽 쪽 110px 출구 2개 + 가운데 출구
+  api.bumper(400, y0 + 400, 16);
   pinField(api, y1 - 50, y1 - 50);
 };
 const P_VSPLIT: Pattern = (api, y0, y1) => { // 갈라졌다가 다시 합쳐짐
