@@ -16,8 +16,13 @@ export const SKILL_INFO: Record<SkillKind, { label: string; color: number }> = {
   push: { label: '밀쳐내기', color: 0xff9f1c },
 };
 export const SKILL_COOLDOWN = 10000;   // 재사용 대기 (게임 시간 ms)
-const DUR: Record<SkillKind, number> = { boost: 2000, shield: 2000, dash: 500, swerve: 400, rewind: 0, push: 0 };
-const PUSH_R = 85;
+const DUR: Record<SkillKind, number> = { boost: 2000, shield: 2000, dash: 500, swerve: 520, rewind: 0, push: 0 }; // swerve 400→520 (+30%)
+// 방향 전환(회전): 가로 가속 0.6→0.72, 최대 가로 속도 6→7.2 (+20%). 전체 속도 상한 10→11 (가로 속도 증가분만큼)
+const SWERVE_ACC = 0.72, SWERVE_MAX = 7.2, SWERVE_CAP = 11;
+const SWERVE_SPIN = 14;                // 회전 표시 각속도(rad/s, 게임 시간) — 시각 효과 전용
+// 밀쳐내기 충격파: 반지름 85→95, 힘 (1 + 2.5·근접도) → (1.4 + 3.5·근접도) (+40%), 속도 상한 8→11
+// 상한 11px/스텝 < 공 지름+가장 얇은 판(26+8) → 벽·판 관통 없음 (기존 폭탄 이벤트 상한 13과 같은 범위)
+const PUSH_R = 95, PUSH_BASE = 1.4, PUSH_GAIN = 3.5, PUSH_CAP = 11, PUSH_JITTER = 0.3; // 방향 흔들림(rad): 한 방향으로만 밀리지 않고 퍼지게
 const FX_MAX = 24;                     // 동시에 그리는 효과 상한 (판정은 누락 없음)
 const TEXT_POOL = 8;                   // 스킬 이름 표시 상한
 
@@ -100,7 +105,7 @@ export class PinballSkills {
       const v = b.go.body.velocity;
       if (s.kind === 'boost' && v.y < 9) this.set(b, v.x, Math.min(9, v.y + 0.25), 9);
       else if (s.kind === 'dash' && v.y < 12) this.set(b, v.x, Math.min(12, v.y + 0.8), 12);
-      else if (s.kind === 'swerve' && v.x * s.dir < 6) this.set(b, v.x + s.dir * 0.6, v.y, 10); // 아래 속도는 유지
+      else if (s.kind === 'swerve' && v.x * s.dir < SWERVE_MAX) this.set(b, v.x + s.dir * SWERVE_ACC, v.y, SWERVE_CAP); // 아래 속도는 유지
     }
     if (now < s.next) return;
     // 발동 시점: 휴면·결승 구역이면 이번 회차 건너뜀(쿨타임 위상 유지)
@@ -126,8 +131,10 @@ export class PinballSkills {
           if (o === b || o.removed || o.record.finishTime !== null || o.go.body.isSleeping) continue; // 자기 자신·완주·휴면 제외
           const dx = o.go.x - x, dy = o.go.y - y, d2 = dx * dx + dy * dy;
           if (d2 >= R2 || d2 < 1) continue;
-          const d = Math.sqrt(d2), f = 1 + 2.5 * (1 - d / PUSH_R), ov = o.go.body.velocity;
-          this.set(o, ov.x + (dx / d) * f, ov.y + (dy / d) * f, 8);
+          // 중심에서 바깥으로 + 공마다 방향(±0.3rad)·세기(±15%) 흔들림 → 자연스럽게 방사형으로 퍼짐
+          const d = Math.sqrt(d2), f = (PUSH_BASE + PUSH_GAIN * (1 - d / PUSH_R)) * this.rng.range(0.85, 1.15), ov = o.go.body.velocity;
+          const a = Math.atan2(dy, dx) + this.rng.range(-PUSH_JITTER, PUSH_JITTER);
+          this.set(o, ov.x + Math.cos(a) * f, ov.y + Math.sin(a) * f, PUSH_CAP);
           this.stats.pushed++;
         }
       }
@@ -157,9 +164,20 @@ export class PinballSkills {
         case 'boost': for (const dx of [-7, 0, 7]) g.lineStyle(2, c, a).lineBetween(x + dx, y - R - 4, x + dx, y - R - 16); break;
         case 'shield': g.lineStyle(3, c, 0.4 + 0.5 * a).strokeCircle(x, y, R + 5).fillStyle(c, 0.12).fillCircle(x, y, R + 5); break;
         case 'dash': g.fillStyle(c, a).fillTriangle(x - 8, y + R + 3, x + 8, y + R + 3, x, y + R + 15); break;
-        case 'swerve': { const d = f.b.skill.dir; g.fillStyle(c, a).fillTriangle(x + d * (R + 16), y, x + d * (R + 4), y - 7, x + d * (R + 4), y + 7); break; }
+        case 'swerve': { // 회전: 공 둘레를 도는 3갈래 호 + 진행 방향 화살표 (방향에 따라 시계/반시계)
+          const d = f.b.skill.dir, rot = d * SWERVE_SPIN * ((now - f.t0) / 1000);
+          for (let k = 0; k < 3; k++) { const s0 = rot + (k * Math.PI * 2) / 3; g.lineStyle(3, c, 0.35 + 0.6 * a).beginPath().arc(x, y, R + 5, s0, s0 + 1.2).strokePath(); }
+          g.lineStyle(2, 0xffd166, 0.5 * a).strokeCircle(x, y, R + 9);
+          g.fillStyle(c, a).fillTriangle(x + d * (R + 20), y, x + d * (R + 8), y - 8, x + d * (R + 8), y + 8);
+          break;
+        }
         case 'rewind': g.lineStyle(3, c, a).lineBetween(x - 8, y + R + 6 + p * 10, x, y + R - 2 + p * 10).lineBetween(x, y + R - 2 + p * 10, x + 8, y + R + 6 + p * 10); break;
-        case 'push': g.lineStyle(3, c, a).strokeCircle(x, y, R + (PUSH_R - R) * p); break;
+        case 'push': { // 충격파: 채운 원 + 두꺼운 고리 + 뒤따르는 고리 + 방사선 8줄
+          const e = 1 - (1 - p) * (1 - p), rr = R + (PUSH_R - R) * e; // 빠르게 퍼졌다가 감속
+          g.fillStyle(c, 0.22 * a).fillCircle(x, y, rr).lineStyle(5, c, a).strokeCircle(x, y, rr).lineStyle(2, 0xffffff, 0.8 * a).strokeCircle(x, y, rr * 0.7);
+          for (let k = 0; k < 8; k++) { const t = (k * Math.PI) / 4; g.lineStyle(2, 0xfff1b8, a).lineBetween(x + Math.cos(t) * rr * 0.75, y + Math.sin(t) * rr * 0.75, x + Math.cos(t) * (rr + 10), y + Math.sin(t) * (rr + 10)); }
+          break;
+        }
       }
     }
     for (const t of this.texts) {
