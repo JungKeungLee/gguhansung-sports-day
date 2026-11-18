@@ -80,6 +80,8 @@ export interface GbHost {
   force?: GateEventKind | null;
 }
 interface Sample { n: number; avgV: number; done: number }
+/** 역전 이벤트 상태: 대기 → 충전·경고 → 실행 → 종료 처리(입구 막·2단계 발사·속도 안전장치 정리) → 쿨타임 → 대기. 대기 외 상태의 발동 요청은 무시(예약 없음) */
+export type GatePhase = 'idle' | 'charge' | 'active' | 'ending' | 'cooldown';
 interface Active { kind: GateEventKind; t0: number; end: number; k: number; range: number; captured: number; limit: number; vmax: number }
 
 export class GateBurst {
@@ -87,7 +89,8 @@ export class GateBurst {
   private congested = 0;       // 밀집+정체 누적 시간(ms)
   private noPass = 0;          // 공이 기다리는 동안 실제 완주가 없었던 시간(ms)
   private lastDone = 0;
-  private readyAt = 0;
+  private phase: GatePhase = 'idle';
+  private readyAt = 0;         // 쿨타임 종료 시각
   private chargeAt = -1;       // 충전 시작 시각 (-1: 충전 아님)
   private why: 'density' | 'stall' = 'density';
   private ev: Active | null = null;
@@ -167,7 +170,9 @@ export class GateBurst {
   }
 
   /** 입구 에너지 막이 닫혀 있거나 이벤트 진행 중 (씬의 입구 정체 흔들기 생략용) */
-  get closed(): boolean { return this.lid !== null || this.ev !== null; }
+  get closed(): boolean { return this.lid !== null || this.phase === 'active'; }
+  /** 현재 상태 (QA·확인용) */
+  get state(): GatePhase { return this.phase; }
 
   /** 감지 구역: 입구 위 ZONE_H 높이의 45° 깔때기 사다리꼴 */
   private inZone(x: number, y: number): boolean {
@@ -195,8 +200,18 @@ export class GateBurst {
     this.lidStep(now);
     if (this.kickAt >= 0 && now >= this.kickAt) this.kickFront();
     if (now < this.guardUntil) this.guard();
-    if (this.ev) { this.run(now); return; }
-    if (this.chargeAt >= 0) { if (now - this.chargeAt >= CHARGE_MS) this.fire(now); return; }
+    switch (this.phase) {
+      case 'charge': if (now - this.chargeAt >= CHARGE_MS) this.fire(now); return;
+      case 'active':
+        if (this.ev) this.run(now);
+        else if (this.kickAt < 0) this.phase = 'ending'; // 폭발: 2단계 발사까지 끝나면 종료 처리로
+        return;
+      case 'ending': // 입구 막·발사·속도 안전장치가 모두 끝난 뒤에만 쿨타임 시작
+        if (!this.lid && this.lidAt < 0 && this.kickAt < 0 && now >= this.guardUntil) this.startCooldown(now, COOLDOWN_MS + COOLDOWN_STEP_MS * (this.stats.events.length - 1));
+        return;
+      case 'cooldown': if (now >= this.readyAt) this.phase = 'idle'; break;
+    }
+    // 밀집·정체 집계는 대기·쿨타임 중에만 (기존과 같은 조건). 발동은 대기 상태에서만
     if (++this.steps < SCAN_STEPS) return;
     this.steps = 0;
     const s = this.sample(), dt = SCAN_STEPS * (1000 / 60);
@@ -208,9 +223,10 @@ export class GateBurst {
     const slow = s.avgV < SLOW_V || this.noPass >= 1200;
     if (slow && s.n > this.stats.peakJamN) this.stats.peakJamN = s.n;
     this.congested = s.n >= JAM_N && slow ? this.congested + dt : Math.max(0, this.congested - dt * 2); // 풀리면 빠르게 감소
-    if (now < this.readyAt || this.stats.events.length >= MAX_EVENTS || this.lid) return;
+    if (this.phase !== 'idle' || this.stats.events.length >= MAX_EVENTS) return;
     if (this.congested >= HOLD_MS || this.noPass >= STALL_MS) {
       this.why = this.congested >= HOLD_MS ? 'density' : 'stall';
+      this.phase = 'charge';
       this.chargeAt = now;
       this.showCharge(true);
       this.say('charge');
@@ -231,7 +247,7 @@ export class GateBurst {
     if (s.n < FIRE_MIN_N) { // 충전 중에 정체가 풀림 → 취소
       this.stats.cancelled++;
       this.congested = 0; this.noPass = 0;
-      this.readyAt = now + 2000;
+      this.startCooldown(now, 2000);
       this.fade(this.banners.charge);
       return;
     }
@@ -248,10 +264,11 @@ export class GateBurst {
     this.stats.snaps.push({ base: s.done, front: near.sort((p, q) => p.d - q.d).slice(0, 10).map((c) => c.b) });
     this.stats.events.push({ kind, why: this.why, t: Math.round(now), n: s.n, k: +k.toFixed(2), hit: 0 });
     this.congested = 0; this.noPass = 0;
-    if (this.h.dry) { this.readyAt = now + COOLDOWN_MS; return; }
+    if (this.h.dry) { this.startCooldown(now, COOLDOWN_MS); return; }
+    this.phase = 'active';
     this.say(kind);
     const lerp = (r: [number, number]) => r[0] + (r[1] - r[0]) * k;
-    if (kind === 'blast') { this.blast(now, lerp(BLAST_R), lerp(BLAST_P)); this.end(now); return; }
+    if (kind === 'blast') { this.blast(now, lerp(BLAST_R), lerp(BLAST_P)); return; }
     const dur = kind === 'hole' ? HOLE_MS : lerp(WIND_MS);
     this.ev = { kind, t0: now, end: now + dur, k, range: kind === 'hole' ? lerp(HOLE_R) : WIND_H, captured: 0, limit: Math.round(lerp(HOLE_CAPTURE)), vmax: lerp(WIND_VMAX) };
     this.refreshNear();
@@ -271,9 +288,10 @@ export class GateBurst {
     }
   }
 
-  /** 이벤트 종료 처리 (쿨타임 시작) */
-  private end(now: number): void {
-    this.readyAt = now + COOLDOWN_MS + COOLDOWN_STEP_MS * (this.stats.events.length - 1);
+  /** 쿨타임 시작 (이벤트가 완전히 끝난 뒤 또는 충전 취소 시) */
+  private startCooldown(now: number, ms: number): void {
+    this.phase = 'cooldown';
+    this.readyAt = now + ms;
   }
 
   /** 이벤트 대상 후보: 입구 위 영향 범위 안의 진행 중 공 (주기적 갱신 → 매 스텝 전체 순회 없음) */
@@ -349,8 +367,9 @@ export class GateBurst {
     } else this.wind.setVisible(false);
     if (e.kind === 'wind') this.stats.events[this.stats.events.length - 1].hit = this.near.length;
     this.ev = null; // near 는 속도 안전장치가 끝날 때까지 유지
-    this.lidUntil = Math.min(this.lidUntil || Infinity, now + LID_AFTER_MS);
-    this.end(now);
+    this.lidAt = -1; // 아직 설치 못 한 입구 막은 취소 (이벤트가 끝난 뒤 늦게 닫히지 않게)
+    if (this.lid) this.lidUntil = Math.min(this.lidUntil, now + LID_AFTER_MS);
+    this.phase = 'ending';
   }
 
   private setV(b: GbBall, vx: number, vy: number, cap: number): void {
@@ -433,7 +452,7 @@ export class GateBurst {
 
   /** 경기 종료: 표시·물리 정리, 이후 발동 없음 */
   stop(): void {
-    this.stopped = true; this.chargeAt = -1; this.lidAt = -1; this.kickAt = -1; this.kick = []; this.ev = null; this.near = [];
+    this.stopped = true; this.phase = 'idle'; this.chargeAt = -1; this.lidAt = -1; this.kickAt = -1; this.kick = []; this.ev = null; this.near = [];
     this.showCharge(false); this.lidView.setVisible(false); this.hole.setVisible(false); this.holePull.setVisible(false); this.wind.setVisible(false);
     if (this.lid) { this.h.scene.matter.world.remove(this.lid); this.lid = null; }
   }
