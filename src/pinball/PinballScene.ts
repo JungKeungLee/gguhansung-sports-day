@@ -5,6 +5,7 @@ import { Rng } from '../game/rng';
 import { type BallRecord, type BallSpec, ballLabel, orderSameStep } from './entries';
 import { type SkillKind, type SkillState, SKILL_KINDS, PinballSkills, assignSkills } from './skills';
 import { type EventKind, EVENT_KINDS, MAP_EVENTS, PinballEvents } from './events';
+import { GateBurst } from './gateBurst';
 import { MAP_EXT, type MapApi, type MapId, type MapTheme, buildPinballMap, mapInfo, mapPhysics } from './maps';
 
 // Phaser 에 포함된 Matter.js (신규 라이브러리 아님)
@@ -158,6 +159,7 @@ export class PinballScene extends Phaser.Scene {
   private seed: number;
   private hazards!: PinballEvents;
   private skillSys!: PinballSkills; // 구슬 고유 스킬 6종 // 랜덤 방해 이벤트 (활성 최대 1개)
+  private gate!: GateBurst;         // 결승 입구 역전 충격파 (결승 입구 전용)
   private keepOrder: boolean;     // 설정 화면 '공 섞기' 순서를 출발 배치에 그대로 사용 (다시 하기는 false → 새로 섞음)
 
   constructor(specs: BallSpec[], seed: number, hooks: PinballHooks, _followMode: 'first' | 'last', mapId: MapId = 'basic', keepOrder = false) {
@@ -183,7 +185,11 @@ export class PinballScene extends Phaser.Scene {
     this.spawnBalls();
     this.initEvents();
     this.skillSys = new PinballSkills({ scene: this, balls: this.balls, seed: this.seed, H, R: BALL_R, noSkillY: FIN_TOP - 60, rewindMaxY: FIN_TOP - 700, viewH: PB_VIEW_H });
+    // 결승 입구 역전 충격파: 전용 난수(기존 경기·이벤트 난수 흐름과 분리)
+    this.gate = new GateBurst({ scene: this, rng: new Rng((this.seed ^ 0x2545f491) >>> 0), balls: this.balls, W, R: BALL_R, gateY: FIN_GATE_Y, gap: FIN_GAP, viewW: PB_VIEW_W, wake: (b) => wake(b.go.body),
+      dry: import.meta.env.DEV && new URLSearchParams(location.search).get('pbgate') === 'off' }); // QA 대조군(개발 전용)
     if (import.meta.env.DEV && new URLSearchParams(location.search).get('pbev')) (window as unknown as { __pbSkills?: unknown }).__pbSkills = this.skillSys;
+    if (import.meta.env.DEV && new URLSearchParams(location.search).get('pbev')) (window as unknown as { __pbGate?: unknown }).__pbGate = this.gate;
   }
 
   /** 랜덤 방해 이벤트 준비: 맵 배치 데이터(미리보기와 동일)로 안전 위치 판정, 전용 난수(기존 경기 난수 흐름과 분리) */
@@ -390,6 +396,7 @@ export class PinballScene extends Phaser.Scene {
     for (const r of this.rotors) r.view.setRotation(r.body.angle);
     this.hazards?.draw(this.elapsed);
     this.skillSys?.draw(this.elapsed);
+    this.gate?.draw(this.elapsed);
     this.updateCamera(delta * this.speed);
     this.updateLabels();
     this.tickTimer -= delta;
@@ -469,6 +476,7 @@ export class PinballScene extends Phaser.Scene {
       for (const b of this.balls) if (!b.removed && b.go.y >= QUEUE_TOP) wake(b.go.body); // 휴면 안전장치: 대기 구역 전체 깨움
       this.lastFinishPass = this.elapsed;
     }
+    this.gate.step(this.elapsed, this.lastFinishPass); // 결승 입구 밀집·정체 감지(주기적) → 충전 → 역전 충격파
     // 같은 스텝에 통과한 공들: 공 고유 ID 번호 오름차순으로 도착 순서 부여 (일관·중복 없음)
     if (!crossed.length) return;
     for (const b of orderSameStep(crossed.map((c) => ({ id: c.spec.id, b: c }))).map((x) => x.b)) {
@@ -480,7 +488,7 @@ export class PinballScene extends Phaser.Scene {
       this.tweens.add({ targets: b.go, alpha: 0, scale: 0.4, duration: 350 });
       this.hooks.onFinish({ ...b.record }, []);
     }
-    if (this.finishedCount === this.balls.length) { this.running = false; this.hazards.stop(); this.hooks.onAllFinished(this.getRecords()); }
+    if (this.finishedCount === this.balls.length) { this.running = false; this.hazards.stop(); this.gate.stop(); this.hooks.onAllFinished(this.getRecords()); }
   }
 
   /** 입구 정체 판정·해소. pick: 해당 입구를 기다리는 공. 입구 위에 공이 없으면 판정 초기화 */
