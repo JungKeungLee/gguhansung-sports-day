@@ -1,39 +1,35 @@
-// 핀볼 구슬 고유 스킬 6종: 공마다 1개 무작위 고정, 게임 시간 기준 10초마다 자동 발동 (사용자 조작 없음)
+// 핀볼 구슬 고유 스킬 5종: 공마다 1개 무작위 고정, 게임 시간 기준 10초마다 자동 발동 (사용자 조작 없음)
 // - 전용 난수(배정·발동) → 기존 물리·랜덤 이벤트 난수 흐름과 분리
 // - 별도 타이머 없음: 씬의 고정 스텝 공 반복문에서 공마다 step() 호출
 // - 결승 깔때기·회전 막대·입구·판정 통로(noSkillY 아래)에서는 발동 안 함, 휴면 공은 그 회차 건너뜀(깨우지 않음)
 import Phaser from 'phaser';
 import { Rng } from '../game/rng';
 
-export type SkillKind = 'boost' | 'shield' | 'dash' | 'swerve' | 'rewind' | 'push';
-export const SKILL_KINDS: SkillKind[] = ['boost', 'shield', 'dash', 'swerve', 'rewind', 'push'];
+export type SkillKind = 'boost' | 'shield' | 'dash' | 'rewind' | 'push'; // 방향 전환(swerve)은 제거 → 결승 입구 역전 이벤트로 대체
+export const SKILL_KINDS: SkillKind[] = ['boost', 'shield', 'dash', 'rewind', 'push'];
 export const SKILL_INFO: Record<SkillKind, { label: string; color: number }> = {
   boost: { label: '급가속', color: 0xffd23f },
   shield: { label: '충격 보호', color: 0x4fc3f7 },
   dash: { label: '중력 돌진', color: 0xff4d4d },
-  swerve: { label: '방향 전환', color: 0xffffff },
   rewind: { label: '역주행', color: 0xb36bff },
   push: { label: '밀쳐내기', color: 0xff9f1c },
 };
 export const SKILL_COOLDOWN = 10000;   // 재사용 대기 (게임 시간 ms)
-const DUR: Record<SkillKind, number> = { boost: 2000, shield: 2000, dash: 500, swerve: 520, rewind: 0, push: 0 }; // swerve 400→520 (+30%)
-// 방향 전환(회전): 가로 가속 0.6→0.72, 최대 가로 속도 6→7.2 (+20%). 전체 속도 상한 10→11 (가로 속도 증가분만큼)
-const SWERVE_ACC = 0.72, SWERVE_MAX = 7.2, SWERVE_CAP = 11;
-const SWERVE_SPIN = 14;                // 회전 표시 각속도(rad/s, 게임 시간) — 시각 효과 전용
+const DUR: Record<SkillKind, number> = { boost: 2000, shield: 2000, dash: 500, rewind: 0, push: 0 };
 // 밀쳐내기 충격파: 반지름 85→95, 힘 (1 + 2.5·근접도) → (1.4 + 3.5·근접도) (+40%), 속도 상한 8→11
 // 상한 11px/스텝 < 공 지름+가장 얇은 판(26+8) → 벽·판 관통 없음 (기존 폭탄 이벤트 상한 13과 같은 범위)
 const PUSH_R = 95, PUSH_BASE = 1.4, PUSH_GAIN = 3.5, PUSH_CAP = 11, PUSH_JITTER = 0.3; // 방향 흔들림(rad): 한 방향으로만 밀리지 않고 퍼지게
 const FX_MAX = 24;                     // 동시에 그리는 효과 상한 (판정은 누락 없음)
 const TEXT_POOL = 8;                   // 스킬 이름 표시 상한
 
-export interface SkillState { kind: SkillKind; next: number; until: number; dir: number }
+export interface SkillState { kind: SkillKind; next: number; until: number }
 
 /** 스킬 배정: 참가 순서(spec 순) 기준 → 공 섞기·출발 배치와 무관하게 고정. forced: QA용 전부 같은 스킬 */
 export function assignSkills(n: number, seed: number, forced: SkillKind | null = null): SkillState[] {
   const rng = new Rng((seed ^ 0x27d4eb2f) >>> 0);
   return Array.from({ length: n }, () => {
     const kind = SKILL_KINDS[rng.int(SKILL_KINDS.length)];
-    return { kind: forced ?? kind, next: rng.range(0, SKILL_COOLDOWN), until: 0, dir: 1 }; // 첫 발동 0~10초 분산
+    return { kind: forced ?? kind, next: rng.range(0, SKILL_COOLDOWN), until: 0 }; // 첫 발동 0~10초 분산
   });
 }
 
@@ -105,7 +101,6 @@ export class PinballSkills {
       const v = b.go.body.velocity;
       if (s.kind === 'boost' && v.y < 9) this.set(b, v.x, Math.min(9, v.y + 0.25), 9);
       else if (s.kind === 'dash' && v.y < 12) this.set(b, v.x, Math.min(12, v.y + 0.8), 12);
-      else if (s.kind === 'swerve' && v.x * s.dir < SWERVE_MAX) this.set(b, v.x + s.dir * SWERVE_ACC, v.y, SWERVE_CAP); // 아래 속도는 유지
     }
     if (now < s.next) return;
     // 발동 시점: 휴면·결승 구역이면 이번 회차 건너뜀(쿨타임 위상 유지)
@@ -122,7 +117,6 @@ export class PinballSkills {
     const s = b.skill, v = b.go.body.velocity;
     s.until = now + DUR[s.kind];
     this.stats.fired[s.kind] = (this.stats.fired[s.kind] ?? 0) + 1;
-    if (s.kind === 'swerve') s.dir = this.rng.next() < 0.5 ? -1 : 1;
     if (s.kind === 'rewind') this.set(b, v.x * 0.5, -this.rng.range(10.5, 13.9), 14); // 상승 약 200~350px (중력 0.28px/스텝²)
     if (s.kind === 'push') {
       const R2 = PUSH_R * PUSH_R;
@@ -164,13 +158,6 @@ export class PinballSkills {
         case 'boost': for (const dx of [-7, 0, 7]) g.lineStyle(2, c, a).lineBetween(x + dx, y - R - 4, x + dx, y - R - 16); break;
         case 'shield': g.lineStyle(3, c, 0.4 + 0.5 * a).strokeCircle(x, y, R + 5).fillStyle(c, 0.12).fillCircle(x, y, R + 5); break;
         case 'dash': g.fillStyle(c, a).fillTriangle(x - 8, y + R + 3, x + 8, y + R + 3, x, y + R + 15); break;
-        case 'swerve': { // 회전: 공 둘레를 도는 3갈래 호 + 진행 방향 화살표 (방향에 따라 시계/반시계)
-          const d = f.b.skill.dir, rot = d * SWERVE_SPIN * ((now - f.t0) / 1000);
-          for (let k = 0; k < 3; k++) { const s0 = rot + (k * Math.PI * 2) / 3; g.lineStyle(3, c, 0.35 + 0.6 * a).beginPath().arc(x, y, R + 5, s0, s0 + 1.2).strokePath(); }
-          g.lineStyle(2, 0xffd166, 0.5 * a).strokeCircle(x, y, R + 9);
-          g.fillStyle(c, a).fillTriangle(x + d * (R + 20), y, x + d * (R + 8), y - 8, x + d * (R + 8), y + 8);
-          break;
-        }
         case 'rewind': g.lineStyle(3, c, a).lineBetween(x - 8, y + R + 6 + p * 10, x, y + R - 2 + p * 10).lineBetween(x, y + R - 2 + p * 10, x + 8, y + R + 6 + p * 10); break;
         case 'push': { // 충격파: 채운 원 + 두꺼운 고리 + 뒤따르는 고리 + 방사선 8줄
           const e = 1 - (1 - p) * (1 - p), rr = R + (PUSH_R - R) * e; // 빠르게 퍼졌다가 감속
