@@ -158,7 +158,7 @@ export class PinballScene extends Phaser.Scene {
   private lastFinishPass = 0;
   private seed: number;
   private hazards!: PinballEvents;
-  private skillSys!: PinballSkills; // 구슬 고유 스킬 6종 // 랜덤 방해 이벤트 (활성 최대 1개)
+  private skillSys!: PinballSkills; // 구슬 고유 스킬 5종 // 랜덤 방해 이벤트 (활성 최대 1개)
   private gate!: GateBurst;         // 결승 입구 역전 충격파 (결승 입구 전용)
   private keepOrder: boolean;     // 설정 화면 '공 섞기' 순서를 출발 배치에 그대로 사용 (다시 하기는 false → 새로 섞음)
 
@@ -185,9 +185,18 @@ export class PinballScene extends Phaser.Scene {
     this.spawnBalls();
     this.initEvents();
     this.skillSys = new PinballSkills({ scene: this, balls: this.balls, seed: this.seed, H, R: BALL_R, noSkillY: FIN_TOP - 60, rewindMaxY: FIN_TOP - 700, viewH: PB_VIEW_H });
-    // 결승 입구 역전 충격파: 전용 난수(기존 경기·이벤트 난수 흐름과 분리)
-    this.gate = new GateBurst({ scene: this, rng: new Rng((this.seed ^ 0x2545f491) >>> 0), balls: this.balls, W, R: BALL_R, gateY: FIN_GATE_Y, gap: FIN_GAP, viewW: PB_VIEW_W, wake: (b) => wake(b.go.body),
-      dry: import.meta.env.DEV && new URLSearchParams(location.search).get('pbgate') === 'off' }); // QA 대조군(개발 전용)
+    // 결승 입구 역전 이벤트(폭발·블랙홀·상승 바람): 전용 난수(기존 경기·이벤트 난수 흐름과 분리)
+    // 블랙홀 이동 위치: 맵 중간 높이 (랜덤 방해 이벤트 구역의 가운데 ±250px), 구조물 판정은 랜덤 이벤트와 같은 배치 데이터 사용
+    const qa = import.meta.env.DEV ? new URLSearchParams(location.search).get('pbgate') : null; // QA(개발 전용): off=대조군, blast|hole|wind=종류 고정
+    const midY = (START_BOTTOM + 330 + QUEUE_TOP - 120) / 2;
+    this.gate = new GateBurst({
+      scene: this, rng: new Rng((this.seed ^ 0x2545f491) >>> 0), balls: this.balls, W, WALL, R: BALL_R, gateY: FIN_GATE_Y, gap: FIN_GAP,
+      viewW: PB_VIEW_W, viewH: PB_VIEW_H, midY: [midY - 250, midY + 250],
+      wake: (b) => wake(b.go.body),
+      isFree: (x, y, r) => this.hazards.isFree(x, y, r),
+      teleport: (b, x, y, color) => this.teleport(b as unknown as BallState, { ax: b.go.x, ay: b.go.y, bx: x, by: y, color }, false, false), // 블랙홀이 자체(재사용) 효과 표시
+      dry: qa === 'off', force: qa === 'blast' || qa === 'hole' || qa === 'wind' ? qa : null,
+    });
     if (import.meta.env.DEV && new URLSearchParams(location.search).get('pbev')) (window as unknown as { __pbSkills?: unknown }).__pbSkills = this.skillSys;
     if (import.meta.env.DEV && new URLSearchParams(location.search).get('pbev')) (window as unknown as { __pbGate?: unknown }).__pbGate = this.gate;
   }
@@ -304,7 +313,7 @@ export class PinballScene extends Phaser.Scene {
   }
 
   /** 순간이동: 출구 근처 빈자리(다른 공과 겹치지 않는 위치)에 놓고 안전한 속도로 시작 */
-  private teleport(b: BallState, p: Portal, count = true): boolean { // count=false: 랜덤 이벤트 이동 (포털 사용 횟수에 넣지 않음)
+  private teleport(b: BallState, p: Portal, count = true, fx = true): boolean { // count=false: 랜덤 이벤트 이동 (포털 사용 횟수에 넣지 않음), fx=false: 효과는 호출 쪽에서 표시
     for (let k = 0; k < 6; k++) {
       const x = p.bx + this.rng.range(-14, 14), y = p.by + this.rng.range(-4, 6);
       if (this.balls.some((o) => o !== b && !o.removed && Math.abs(o.go.y - y) < 30 && Math.hypot(o.go.x - x, o.go.y - y) < BALL_R * 2 + 2)) continue;
@@ -315,7 +324,7 @@ export class PinballScene extends Phaser.Scene {
       b.anchor = { x, y, t: this.elapsed };
       b.portalReadyAt = this.elapsed + PORTAL_COOLDOWN;
       if (count) { b.record.portals = (b.record.portals ?? 0) + 1; this.portalUses++; }
-      this.portalFx(p.ax, p.ay, p.color); this.portalFx(x, y, p.color);
+      if (fx) { this.portalFx(p.ax, p.ay, p.color); this.portalFx(x, y, p.color); }
       return true;
     }
     return false; // 출구가 막혀 있으면 이번 스텝은 보류
@@ -472,11 +481,13 @@ export class PinballScene extends Phaser.Scene {
       }
     }
     // 결승 입구 정체 해소: 입구 바로 위에 공이 있는데 0.9초 이상 아무도 못 지나가면 주변 공을 살짝 흔듦
-    if (this.unjam(FIN_GATE_Y, () => true, this.lastFinishPass)) {
+    // 역전 이벤트 진행·입구 막이 닫힌 동안은 의도된 정지 → 입구 흔들기·대기 구역 전체 깨우기 생략 (불필요한 물리 연산 방지)
+    if (this.gate.closed) this.stalledSince.delete(FIN_GATE_Y);
+    else if (this.unjam(FIN_GATE_Y, () => true, this.lastFinishPass)) {
       for (const b of this.balls) if (!b.removed && b.go.y >= QUEUE_TOP) wake(b.go.body); // 휴면 안전장치: 대기 구역 전체 깨움
       this.lastFinishPass = this.elapsed;
     }
-    this.gate.step(this.elapsed, this.lastFinishPass); // 결승 입구 밀집·정체 감지(주기적) → 충전 → 역전 충격파
+    this.gate.step(this.elapsed); // 결승 입구 밀집·정체 감지(주기적) → 충전 → 역전 이벤트
     // 같은 스텝에 통과한 공들: 공 고유 ID 번호 오름차순으로 도착 순서 부여 (일관·중복 없음)
     if (!crossed.length) return;
     for (const b of orderSameStep(crossed.map((c) => ({ id: c.spec.id, b: c }))).map((x) => x.b)) {

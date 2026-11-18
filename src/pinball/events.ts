@@ -277,6 +277,13 @@ export class PinballEvents {
     return null;
   }
 
+  /** 외부(결승 입구 블랙홀 등)용: 반지름 r 원이 맵 구조물·포털·활성 망치와 겹치지 않는지 */
+  isFree(x: number, y: number, r: number): boolean {
+    const e = this.ev;
+    if (e?.kind === 'hammer' && Math.abs(y - e.y) < HAM_H / 2 + r + 20 && Math.abs(x - (e.hx ?? e.x)) < HAM_A + HAM_W / 2 + r + 20) return false;
+    return this.free(x, y, r, r);
+  }
+
   /** pinsOk: 망치 전용 — 작은 원형 핀은 공이 옆으로 미끄러져 빠지므로 허용 (판·벽·회전체·범퍼·포털만 금지) */
   private free(x: number, y: number, hw: number, hh: number, pinsOk = false): boolean {
     const { W, WALL } = this.h;

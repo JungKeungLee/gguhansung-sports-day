@@ -1,36 +1,66 @@
-// 결승 입구 역전 충격파: 마지막(결승) 입구 위 깔때기에 공이 몰려 정체되면 충전 → 충격파로 대기 줄을 흩뜨려 도착 순서를 다시 섞음
-// - 결승 입구에서만 동작 (다른 구간 없음). 점수·결과 계산은 건드리지 않음: 공의 속도만 바꿈
-// - 판정은 일정 주기(SCAN_STEPS 스텝)마다 입구 주변 공만 집계, 충격파는 발동 순간 1회만 계산
+// 결승 입구 역전 이벤트: 마지막(결승) 입구 위 깔때기에 공이 몰리거나 정체되면 충전 → 3종 중 1개 무작위 발동
+//   💥 초강력 폭발(40%) · 🌀 블랙홀(30%) · 🌪️ 상승 바람(30%)  — 동시에 1개만, 발동 중에는 입구를 에너지 막으로 잠시 닫음
+// - 결승 입구에서만 동작. 점수·결과 계산은 건드리지 않음 (공의 속도·위치만 바꿈, 블랙홀 이동은 씬의 기존 순간이동 함수 사용 → ID·기록 유지)
+// - 판정은 일정 주기(SCAN_STEPS 스텝)마다 입구 주변만 집계. 이벤트 중에도 주변 공 목록을 주기적으로 갱신해 그 공들만 처리
 // - 입구(세로 통로)를 이미 지난 공·완주 공은 대상 아님
-// 모든 시간은 게임 내 시간(ms, 고정 스텝 누적) → 배속과 무관. 속도 단위: px/스텝
+// - 표시 객체는 생성 시 1회만 만들고 매 프레임 위치·크기·투명도만 변경 (프레임마다 도형·글자를 다시 그리지 않음)
+// 모든 시간은 게임 내 시간(ms, 고정 스텝 누적) → 배속과 무관. 속도 단위: px/스텝 (중력 ≈ 0.28px/스텝²)
 import Phaser from 'phaser';
 import type { Rng } from '../game/rng';
 
-// ───── 정체 감지 ─────
+export type GateEventKind = 'blast' | 'hole' | 'wind';
+export const GATE_EVENT_WEIGHTS: Record<GateEventKind, number> = { blast: 0.4, hole: 0.3, wind: 0.3 };
+const KINDS: GateEventKind[] = ['blast', 'hole', 'wind'];
+
+// ───── 정체 감지 (전체 공 수와 무관, 입구 주변 밀집·정체만 사용) ─────
 const SCAN_STEPS = 6;          // 6스텝(=100ms)마다 집계
-const ZONE_H = 220;            // 입구 위 감지 높이: 45° 깔때기 안 (회전 막대 최저점 아래쪽 ~ 입구)
-const FILL_MIN = 0.3;          // 감지 구역 면적 대비 공 면적 비율 (공 500개 실측 최대 ≈1.0, 가장자리 공 포함) → 공 지름 26px 기준 약 33개 이상
-const SLOW_V = 1.3;            // 구역 안 공 평균 속도(px/스텝)가 이보다 느리면 정체 (자유 낙하 공은 보통 4 이상)
-const FLOW_STALL_MS = 1200;    // 또는 이 시간 동안 아무도 결승선을 못 지나감
-const HOLD_MS = 2500;          // 밀집+정체가 이만큼 계속되어야 충전 시작 (잠깐 몰렸다 빠지는 경우 제외)
-const CHARGE_MS = 1300;        // 충전(경고) 표시 시간 → 그 뒤 발동
-// ───── 충격파 ─────
-const RANGE_MIN = 170, RANGE_MAX = 300;   // 범위(px): 밀집도에 비례, 상한 300
-const POWER_MIN = 7.5, POWER_MAX = 12;    // 중심 최대 속도(px/스텝): 밀집도에 비례, 상한 12 (상승 높이 ≈ v²/0.56 → 최대 약 260px)
-const SPEED_CAP = 13;                     // 개별 공 속도 상한 (기존 폭탄 이벤트와 동일) → 판·벽 관통 방지
-const JITTER = 0.5;                       // 방향 흔들림(rad) → 여러 방향으로 흩어짐
-const FRONT_R = 90;                       // 입구 앞 이 거리 안의 공 = 곧 통과할 공 (2단계 수직 발사 대상)
-const KICK_DELAY_MS = 130;                // 2단계: 1단계로 더미가 벌어진 뒤 앞줄 공을 거의 수직으로 발사 → 더미 위로 올라가 뒤로 밀림
-// (깔때기에서는 아래에 있는 공부터 빠져나가므로, 맨 아래 공을 위로 보내야 실제로 순서가 뒤집힘)
-// ───── 입구 에너지 막: 충격파 직후 잠깐 입구를 닫아 흩어진 공들이 다시 섞인 뒤에 통과 (도착 순서 재추첨) ─────
-const LID_DELAY_MS = 200;      // 2단계 발사 뒤 설치 (입구 앞 공이 먼저 튀어 오른 뒤)
-const LID_MS = 1500;           // 닫혀 있는 시간 (게임 시간) — 짧게 유지해 진행 정체 없음
-const LID_RETRY_MS = 400;      // 막 자리에 공이 걸쳐 있으면 이 시간까지 재시도, 그래도 막혀 있으면 이번 회차 생략 (공 겹침·끼임 방지)
-const LID_W_PAD = 30, LID_H = 10, LID_UP = 8; // 폭 = 입구 폭+30 (양쪽 깔때기 판에 걸침), 두께 10, 입구 위 8px
+const ZONE_H = 220;            // 감지 구역: 입구 위 220px 높이의 45° 깔때기 (공 최대 약 110개 수용)
+const JAM_N = 7;               // [밀집 경로] 감지 구역 안 공 7개 이상 (입구 폭 46px = 공 1.77개 → 7개면 약 2초 이상 대기 줄)
+const SLOW_V = 1.3;            //            + 평균 속도 1.3px/스텝 미만 (자유 낙하 공은 보통 4 이상)
+const HOLD_MS = 2000;          //            + 이 상태가 2초 지속 (잠깐 몰렸다 빠지는 경우 제외)
+const STALL_N = 4;             // [정체 경로] 공 4개 이상이 기다리는데
+const STALL_MS = 2000;         //            실제 완주가 2초 동안 없음 (기존 입구 흔들기로도 안 풀림, 공이 기다릴 때만 누적)
+const FIRE_MIN_N = 4;          // 충전 끝 시점에 이보다 적으면 취소 (충전 중 정체가 풀린 경우)
+const FULL_N = 60;             // 이 개수 이상 몰리면 이벤트 세기 최대 (세기 k = 0~1)
+const CHARGE_MS = 1200;        // 충전(경고) 표시 → 그 뒤 발동
 // ───── 연속 발동 방지 ─────
-const COOLDOWN_MS = 9000;      // 발동 후 최소 대기
-const COOLDOWN_STEP_MS = 2500; // 발동할 때마다 대기 시간 증가 (줄이 계속 길어도 점점 드물게)
-const MAX_BURSTS = 6;          // 경기당 최대 발동 횟수 → 모든 공이 결국 통과
+const COOLDOWN_MS = 8000;      // 이벤트 종료 후 최소 대기
+const COOLDOWN_STEP_MS = 2000; // 발동할 때마다 대기 증가
+const MAX_EVENTS = 6;          // 경기당 최대 발동 → 모든 공이 결국 통과
+// ───── 입구 에너지 막 (이벤트 중 입구를 닫아, 흩어진 공이 다시 섞인 뒤 통과) ─────
+const LID_W_PAD = 30, LID_H = 10, LID_UP = 8; // 폭 = 입구 폭+30 (양쪽 깔때기 판에 걸침), 두께 10, 입구 위 8px
+const LID_RETRY_MS = 400;      // 막 자리에 공이 걸쳐 있으면 재시도, 그래도 막혀 있으면 이번 회차 생략 (겹침·끼임 방지)
+const LID_AFTER_MS = 600;      // 블랙홀·상승 바람 종료 후 추가로 닫아 두는 시간
+// ───── 💥 초강력 폭발 (기존 입구 충격파를 통합·강화) ─────
+const BLAST_R: [number, number] = [260, 400];  // 범위(px): 이전 170~300
+const BLAST_P: [number, number] = [12, 16];    // 중심 최대 속도(px/스텝): 이전 7.5~12 (16 → 최대 약 460px 상승)
+const BLAST_CAP = 16;                          // 개별 공 속도 상한: 이전 13. 맵 기존 속도 상한(15~16)과 같은 수준 → 판·벽 관통 없음
+const BLAST_JITTER = 0.55;                     // 방향 흔들림(rad) → 위·양옆 여러 방향
+const FRONT_R = 140;                           // 입구 앞 이 거리 안 = 곧 통과할 공 → 2단계 수직 발사 (더미 위로 올라가 뒤로 밀림)
+const KICK_DELAY_MS = 130;
+const BLAST_LID_MS = 2200, BLAST_LID_DELAY = 200; // 앞줄 공이 떠 있는 동안 입구를 닫아 뒤 공이 먼저 통과하지 않게 (재정렬 후 열림)
+// ───── 🌀 블랙홀 ─────
+const HOLE_MS = 2200;                          // 흡입 시간
+const HOLE_UP = 36;                            // 중심: 입구 위 36px
+const HOLE_R: [number, number] = [200, 300];   // 흡입 반경
+const HOLE_CATCH = 30;                         // 중심에서 이 거리 안이면 흡수 → 맵 중간 높이로 이동
+const HOLE_CAPTURE: [number, number] = [6, 30];// 이벤트당 최대 흡수 개수 (밀집도 비례)
+const HOLE_PER_STEP = 1;                       // 스텝당 최대 이동 개수 (부하·표시 분산 → 30개 흡수에 0.5초 이상)
+const HOLE_MIN_SHOW = 1500;                    // 흡수 한도에 일찍 도달해도 블랙홀은 최소 이 시간 표시
+const HOLE_VMAX = 9;
+const HOLE_COLOR = 0x9b5cff;
+const HOLE_MIN_TARGETS = 3;                    // 아직 이동한 적 없는 공이 블랙홀 중심 120px 안에 이보다 적으면 블랙홀 대신 다른 이벤트 (재이동 제한으로 헛발동 방지)
+const HOLE_TARGET_R = 120;
+const POP_POOL = 8;                            // 이동 위치 표시 고리 (재사용, 동시에 최대 8개)
+// ───── 🌪️ 상승 바람 (강제 이동 없이 위쪽 가속도만 추가 → 기존 물리 충돌 그대로) ─────
+const WIND_MS: [number, number] = [2000, 2600];
+const WIND_H = 340;                            // 영향 높이: 결승 깔때기 전체 (입구 위 340px)
+const WIND_ACC = 0.55;                         // 위쪽 가속(px/스텝²): 위 0.55 ~ 아래 0.85 (+세기 0.2) → 중력(0.28)을 항상 이김
+const WIND_VMAX: [number, number] = [10, 13];  // 상승 속도 상한
+const WIND_TURB = 0.3;                         // 좌우 난류 (공끼리 부딪혀 다른 경로로)
+const WIND_CAP = 14;
+// ───── 속도 안전장치: 이벤트 중·폭발 후 1.5초 동안 입구 주변 공 속도를 16px/스텝 이하로 (공끼리 충돌로 더 빨라지는 경우 방지) ─────
+const GUARD_MS = 1500, GUARD_CAP = 16;
 
 export interface GbBall {
   go: { x: number; y: number; body: MatterJS.BodyType; setVelocity(x: number, y?: number): unknown };
@@ -39,198 +69,410 @@ export interface GbBall {
 }
 export interface GbHost {
   scene: Phaser.Scene; rng: Rng; balls: GbBall[];
-  W: number; R: number; gateY: number; gap: number; viewW: number;
+  W: number; WALL: number; R: number; gateY: number; gap: number; viewW: number; viewH: number;
+  midY: [number, number];                    // 블랙홀 이동 높이 범위 (맵 중간)
   wake(b: GbBall): void;
-  /** QA 전용(개발 환경): true면 판정·기록만 하고 실제 충격파·막은 적용하지 않음 (효과 비교용 대조군) */
+  isFree(x: number, y: number, r: number): boolean;                        // 맵 구조물·포털과 겹치지 않는지
+  teleport(b: GbBall, x: number, y: number, color: number): boolean;       // 씬 기존 순간이동 (다른 공과 겹치면 false)
+  /** QA 전용(개발 환경): true면 판정·기록만 하고 이벤트는 적용하지 않음 (효과 비교용 대조군) */
   dry?: boolean;
+  /** QA 전용(개발 환경): 이벤트 종류 고정 */
+  force?: GateEventKind | null;
 }
-interface Sample { n: number; fill: number; avgV: number }
+interface Sample { n: number; avgV: number; done: number }
+interface Active { kind: GateEventKind; t0: number; end: number; k: number; range: number; captured: number; limit: number; vmax: number }
 
 export class GateBurst {
   private steps = 0;
   private congested = 0;       // 밀집+정체 누적 시간(ms)
+  private noPass = 0;          // 공이 기다리는 동안 실제 완주가 없었던 시간(ms)
+  private lastDone = 0;
   private readyAt = 0;
   private chargeAt = -1;       // 충전 시작 시각 (-1: 충전 아님)
+  private why: 'density' | 'stall' = 'density';
+  private ev: Active | null = null;
+  private near: GbBall[] = []; // 이벤트 대상 후보 (주기적 갱신)
+  private warped = new WeakSet<GbBall>(); // 블랙홀 이동은 공마다 경기당 1회
   private stopped = false;
   private lid: MatterJS.BodyType | null = null;
-  private lidAt = -1;          // 막 설치 예정 시각 (-1: 없음)
+  private lidAt = -1;
   private lidUntil = 0;
-  private kick: GbBall[] = [];  // 2단계 발사 대상 (앞줄 공)
+  private lidHold = 0;         // 막 설치 후 유지 시간
+  private lidGiveUp = 0;       // 이 시각까지 막 자리가 비지 않으면 이번 회차 생략
+  private guardUntil = 0;      // 속도 안전장치 종료 시각
+  private band: GbBall[] | null = null; // 블랙홀 이동 구역(맵 중간)의 공 목록 (스텝마다 1회만 생성)
+  private readonly spots: { x: number; y: number }[] = []; // 블랙홀 이동 후보 자리: 구조물·포털과 안 겹치는 격자점 (맵 중간 높이, 30px 간격, 생성 시 1회 계산)
+  private kick: GbBall[] = [];
   private kickAt = -1;
   private kickPower = 0;
-  private readonly area: number;
-  private g: Phaser.GameObjects.Graphics;
-  private banner: Phaser.GameObjects.Text;
+  private readonly cx: number;
+  // 표시 객체 (1회 생성)
+  private warn: Phaser.GameObjects.Arc;
+  private core: Phaser.GameObjects.Arc;
+  private rays: Phaser.GameObjects.Graphics;
+  private lidView: Phaser.GameObjects.Rectangle;
+  private flash: Phaser.GameObjects.Arc;
+  private rings: Phaser.GameObjects.Arc[] = [];
+  private screen: Phaser.GameObjects.Rectangle;
+  private hole: Phaser.GameObjects.Container;
+  private holePull: Phaser.GameObjects.Arc;
+  private pops: Phaser.GameObjects.Arc[] = [];
+  private popNext = 0;
+  private wind: Phaser.GameObjects.Container;
+  private windStreaks: Phaser.GameObjects.Graphics;
+  private banners: Record<'charge' | GateEventKind, Phaser.GameObjects.Text>;
   /** QA·확인용 통계 */
-  readonly stats = { bursts: [] as { t: number; n: number; fill: number; avgV: number; range: number; power: number; hit: number }[], peakFill: 0, peakN: 0, scans: 0, lids: 0, lidSkipped: 0, snaps: [] as { base: number; front: GbBall[] }[] };
+  readonly stats = {
+    events: [] as { kind: GateEventKind; why: string; t: number; n: number; k: number; hit: number }[],
+    snaps: [] as { base: number; front: GbBall[] }[], peakN: 0, peakJamN: 0, peakNoPassMs: 0, cancelled: 0, lids: 0, lidSkipped: 0, captured: 0, captureFail: 0, scans: 0,
+  };
 
   constructor(private h: GbHost) {
-    this.area = h.gap * ZONE_H + ZONE_H * ZONE_H; // 45° 깔때기 사다리꼴: 아래 폭 gap, 높이 z에서 폭 gap+2z
-    this.g = h.scene.add.graphics().setDepth(8);
-    this.banner = h.scene.add.text(h.viewW / 2, 128, '', {
-      fontFamily: 'Malgun Gothic, sans-serif', fontSize: '28px', fontStyle: 'bold', color: '#ffd166', stroke: '#000000', strokeThickness: 6,
+    const sc = h.scene, cx = (this.cx = h.W / 2), gy = h.gateY;
+    // 충전 경고
+    this.warn = sc.add.circle(cx, gy - 10, 235, 0xff5a36, 0.14).setStrokeStyle(5, 0xffd166).setDepth(8).setVisible(false);
+    this.core = sc.add.circle(cx, gy - 10, 26, 0xfff1b8).setDepth(8).setVisible(false);
+    this.rays = sc.add.graphics({ x: cx, y: gy - 10 }).setDepth(8).setVisible(false);
+    for (let i = 0; i < 8; i++) { const t = (i * Math.PI) / 4; this.rays.lineStyle(3, 0xffd166, 0.9).lineBetween(Math.cos(t) * 265, Math.sin(t) * 265, Math.cos(t) * 239, Math.sin(t) * 239); }
+    this.lidView = sc.add.rectangle(cx, gy - LID_UP, h.gap + LID_W_PAD, LID_H, 0x7ff3ff).setStrokeStyle(2, 0xffffff, 0.9).setDepth(8).setVisible(false);
+    // 폭발
+    this.flash = sc.add.circle(cx, gy, BLAST_R[1] * 0.45, 0xfff1b8, 0.9).setDepth(8).setVisible(false);
+    for (const [c, w] of [[0xffffff, 10], [0xff5a36, 8], [0xffd166, 6]]) this.rings.push(sc.add.circle(cx, gy, BLAST_R[1]).setStrokeStyle(w, c).setDepth(8).setVisible(false));
+    this.screen = sc.add.rectangle(h.viewW / 2, h.viewH / 2, h.viewW, h.viewH, 0xfff1b8).setScrollFactor(0).setDepth(29).setAlpha(0);
+    // 블랙홀: 보라 빛 + 검은 핵 + 회전하는 소용돌이 호 3개 + 수축하는 흡입 고리
+    const hy = gy - HOLE_UP;
+    this.hole = sc.add.container(cx, hy).setDepth(8).setVisible(false);
+    this.hole.add(sc.add.circle(0, 0, 90, HOLE_COLOR, 0.22));
+    for (let i = 0; i < 3; i++) this.hole.add(sc.add.arc(0, 0, 44 + i * 26, i * 120, i * 120 + 230, false).setStrokeStyle(6 - i * 1.5, i ? HOLE_COLOR : 0xffffff, 0.9 - i * 0.2).setClosePath(false));
+    this.hole.add(sc.add.circle(0, 0, 30, 0x12001f, 1).setStrokeStyle(3, 0xd7b8ff));
+    this.holePull = sc.add.circle(cx, hy, HOLE_R[1]).setStrokeStyle(4, HOLE_COLOR, 0.8).setDepth(8).setVisible(false);
+    for (let i = 0; i < POP_POOL; i++) this.pops.push(sc.add.circle(0, 0, 46).setStrokeStyle(4, HOLE_COLOR).setDepth(7).setVisible(false));
+    // 상승 바람: 깔때기 모양 기둥 + 위로 흐르는 화살표 줄 (1회 그림, y만 이동)
+    this.wind = sc.add.container(cx, gy).setDepth(8).setVisible(false);
+    const col = sc.add.graphics();
+    col.fillStyle(0xbfe9ff, 0.16).fillPoints([{ x: -h.gap / 2, y: 0 }, { x: h.gap / 2, y: 0 }, { x: h.gap / 2 + WIND_H, y: -WIND_H }, { x: -h.gap / 2 - WIND_H, y: -WIND_H }], true);
+    this.windStreaks = sc.add.graphics();
+    for (let y = 0; y > -WIND_H * 2; y -= 60) for (const x of [-120, -40, 40, 120]) {
+      const ox = x + ((y / 60) % 2 ? 20 : 0);
+      this.windStreaks.lineStyle(4, 0xffffff, 0.75).lineBetween(ox - 16, y + 12, ox, y).lineBetween(ox, y, ox + 16, y + 12);
+    }
+    this.wind.add([col, this.windStreaks]);
+    // 문구별 배너 (발동 중 글자 다시 그리기 없음)
+    const banner = (text: string, color: string) => sc.add.text(h.viewW / 2, 128, text, {
+      fontFamily: 'Malgun Gothic, sans-serif', fontSize: '28px', fontStyle: 'bold', color, stroke: '#000000', strokeThickness: 6,
       backgroundColor: 'rgba(20,4,8,0.72)', padding: { x: 16, y: 6 },
     }).setOrigin(0.5).setScrollFactor(0).setDepth(30).setAlpha(0);
+    for (let y = h.midY[0]; y <= h.midY[1]; y += 30) for (let x = h.WALL + h.R + 30; x <= h.W - h.WALL - h.R - 30; x += 30) if (h.isFree(x, y, h.R + 14)) this.spots.push({ x, y });
+    this.banners = { charge: banner('⚡ 결승 입구 에너지 폭주!', '#ffd166'), blast: banner('💥 초강력 폭발!', '#ff5a36'), hole: banner('🌀 블랙홀 출현!', '#c9a7ff'), wind: banner('🌪️ 상승 바람!', '#bfe9ff') };
   }
 
-  /** 감지 구역 안인지: 입구 위 ZONE_H 높이의 45° 깔때기 사다리꼴 */
+  /** 입구 에너지 막이 닫혀 있거나 이벤트 진행 중 (씬의 입구 정체 흔들기 생략용) */
+  get closed(): boolean { return this.lid !== null || this.ev !== null; }
+
+  /** 감지 구역: 입구 위 ZONE_H 높이의 45° 깔때기 사다리꼴 */
   private inZone(x: number, y: number): boolean {
     const up = this.h.gateY - y;
-    return up >= 0 && up <= ZONE_H && Math.abs(x - this.h.W / 2) <= this.h.gap / 2 + up;
+    return up >= 0 && up <= ZONE_H && Math.abs(x - this.cx) <= this.h.gap / 2 + up;
   }
-
-  /** 입구(세로 통로)를 이미 지난 공: 충격파 대상 아님 */
-  private passed(b: GbBall): boolean { return b.go.y >= this.h.gateY - 2 && Math.abs(b.go.x - this.h.W / 2) <= this.h.gap / 2 + 2; }
+  /** 입구(세로 통로)를 이미 지난 공 */
+  private passed(b: GbBall): boolean { return b.go.y >= this.h.gateY - 2 && Math.abs(b.go.x - this.cx) <= this.h.gap / 2 + 2; }
+  private active(b: GbBall): boolean { return !b.removed && b.record.finishTime === null && !this.passed(b); }
 
   private sample(): Sample {
-    let n = 0, sv = 0;
+    let n = 0, sv = 0, done = 0;
     for (const b of this.h.balls) {
-      if (b.removed || b.record.finishTime !== null || !this.inZone(b.go.x, b.go.y)) continue;
+      if (b.record.finishTime !== null) { done++; continue; }
+      if (b.removed || !this.inZone(b.go.x, b.go.y)) continue;
       const v = b.go.body.velocity;
       n++; sv += Math.hypot(v.x, v.y);
     }
-    return { n, fill: (n * Math.PI * this.h.R * this.h.R) / this.area, avgV: n ? sv / n : 0 };
+    return { n, avgV: n ? sv / n : 0, done };
   }
 
-  /** 2단계: 앞줄 공을 거의 수직으로 발사 (이미 통과·완주한 공 제외) */
-  private kickFront(): void {
-    const { rng } = this.h;
-    for (const b of this.kick) {
-      if (b.removed || b.record.finishTime !== null || this.passed(b)) continue;
-      const a = -Math.PI / 2 + rng.range(-0.35, 0.35), sp = Math.min(SPEED_CAP, this.kickPower * rng.range(0.95, 1.1));
-      this.h.wake(b);
-      b.go.setVelocity(Math.cos(a) * sp, Math.sin(a) * sp);
-    }
-    this.kick = []; this.kickAt = -1;
-  }
-
-  /** 입구 에너지 막 설치·해제 */
-  private lidStep(now: number): void {
-    const { scene, W, gateY, gap, R } = this.h;
-    if (this.lid && now >= this.lidUntil) { scene.matter.world.remove(this.lid); this.lid = null; }
-    if (this.lidAt < 0 || now < this.lidAt) return;
-    const ly = gateY - LID_UP, hw = (gap + LID_W_PAD) / 2;
-    const blocked = this.h.balls.some((b) => !b.removed && b.record.finishTime === null && Math.abs(b.go.y - ly) < LID_H / 2 + R && Math.abs(b.go.x - W / 2) < hw + R);
-    if (blocked) { if (now - this.lidAt > LID_RETRY_MS) { this.lidAt = -1; this.stats.lidSkipped++; } return; }
-    this.lid = scene.matter.add.rectangle(W / 2, ly, hw * 2, LID_H, { isStatic: true, restitution: 0.1, friction: 0.01 }) as unknown as MatterJS.BodyType;
-    this.lidUntil = now + LID_MS;
-    this.lidAt = -1;
-    this.stats.lids++;
-  }
-
-  /** 고정 스텝마다 1회 (씬의 공 반복이 끝난 뒤). lastPass: 마지막 완주 시각 */
-  step(now: number, lastPass: number): void {
+  /** 고정 스텝마다 1회 (씬의 공 반복이 끝난 뒤) */
+  step(now: number): void {
     if (this.stopped) return;
     this.lidStep(now);
     if (this.kickAt >= 0 && now >= this.kickAt) this.kickFront();
+    if (now < this.guardUntil) this.guard();
+    if (this.ev) { this.run(now); return; }
     if (this.chargeAt >= 0) { if (now - this.chargeAt >= CHARGE_MS) this.fire(now); return; }
     if (++this.steps < SCAN_STEPS) return;
     this.steps = 0;
-    const s = this.sample();
+    const s = this.sample(), dt = SCAN_STEPS * (1000 / 60);
     this.stats.scans++;
-    if (s.fill > this.stats.peakFill) { this.stats.peakFill = s.fill; this.stats.peakN = s.n; }
-    const jam = s.fill >= FILL_MIN && (s.avgV < SLOW_V || now - lastPass > FLOW_STALL_MS);
-    const dt = SCAN_STEPS * (1000 / 60);
-    this.congested = jam ? this.congested + dt : Math.max(0, this.congested - dt * 2); // 풀리면 빠르게 감소
-    if (now < this.readyAt || this.stats.bursts.length >= MAX_BURSTS) return;
-    if (this.congested >= HOLD_MS) {
+    if (s.n > this.stats.peakN) this.stats.peakN = s.n;
+    this.noPass = s.done > this.lastDone || s.n < STALL_N ? 0 : this.noPass + dt;
+    this.lastDone = s.done;
+    if (this.noPass > this.stats.peakNoPassMs) this.stats.peakNoPassMs = Math.round(this.noPass);
+    const slow = s.avgV < SLOW_V || this.noPass >= 1200;
+    if (slow && s.n > this.stats.peakJamN) this.stats.peakJamN = s.n;
+    this.congested = s.n >= JAM_N && slow ? this.congested + dt : Math.max(0, this.congested - dt * 2); // 풀리면 빠르게 감소
+    if (now < this.readyAt || this.stats.events.length >= MAX_EVENTS || this.lid) return;
+    if (this.congested >= HOLD_MS || this.noPass >= STALL_MS) {
+      this.why = this.congested >= HOLD_MS ? 'density' : 'stall';
       this.chargeAt = now;
-      this.say('⚡ 역전 충격파 충전 중!', '#ffd166');
+      this.showCharge(true);
+      this.say('charge');
     }
+  }
+
+  private pick(): GateEventKind {
+    if (this.h.force) return this.h.force;
+    let r = this.h.rng.next();
+    for (const k of KINDS) { r -= GATE_EVENT_WEIGHTS[k]; if (r < 0) return k; }
+    return 'blast';
   }
 
   private fire(now: number): void {
     this.chargeAt = -1;
-    const s = this.sample(); // 발동 순간 밀집도로 범위·힘 결정
-    const k = Phaser.Math.Clamp((s.fill - FILL_MIN) / (0.8 - FILL_MIN), 0, 1);
-    const range = RANGE_MIN + (RANGE_MAX - RANGE_MIN) * k;
-    const power = POWER_MIN + (POWER_MAX - POWER_MIN) * k;
-    const { W, gateY, rng } = this.h, cx = W / 2, cy = gateY + 8; // 중심: 입구 바로 아래 → 공은 위·바깥(깔때기 위쪽)으로 흩어짐
-    let hit = 0, done = 0;
-    const cand: { b: GbBall; d: number }[] = []; // 기록용: 입구에 가까운 순 (= 원래 곧 도착할 공)
+    this.showCharge(false);
+    const s = this.sample();
+    if (s.n < FIRE_MIN_N) { // 충전 중에 정체가 풀림 → 취소
+      this.stats.cancelled++;
+      this.congested = 0; this.noPass = 0;
+      this.readyAt = now + 2000;
+      this.fade(this.banners.charge);
+      return;
+    }
+    let kind = this.pick();
+    const k = Phaser.Math.Clamp((s.n - JAM_N) / (FULL_N - JAM_N), 0, 1);
+    if (kind === 'hole' && !this.h.force) { // 이동 가능한 공이 거의 없으면 폭발·상승 바람 중 하나 (40:30 비율 유지)
+      let targets = 0;
+      for (const b of this.h.balls) if (targets < HOLE_MIN_TARGETS && this.active(b) && !this.warped.has(b) && Math.hypot(b.go.x - this.cx, b.go.y - (this.h.gateY - HOLE_UP)) < HOLE_TARGET_R) targets++;
+      if (targets < HOLE_MIN_TARGETS) kind = this.h.rng.next() < 4 / 7 ? 'blast' : 'wind';
+    }
+    // 기록: 입구에 가까운 10개 (= 원래 곧 도착할 공)
+    const near: { b: GbBall; d: number }[] = [];
+    for (const b of this.h.balls) if (this.active(b) && this.h.gateY - b.go.y < 400) near.push({ b, d: Math.hypot(b.go.x - this.cx, b.go.y - this.h.gateY) });
+    this.stats.snaps.push({ base: s.done, front: near.sort((p, q) => p.d - q.d).slice(0, 10).map((c) => c.b) });
+    this.stats.events.push({ kind, why: this.why, t: Math.round(now), n: s.n, k: +k.toFixed(2), hit: 0 });
+    this.congested = 0; this.noPass = 0;
+    if (this.h.dry) { this.readyAt = now + COOLDOWN_MS; return; }
+    this.say(kind);
+    const lerp = (r: [number, number]) => r[0] + (r[1] - r[0]) * k;
+    if (kind === 'blast') { this.blast(now, lerp(BLAST_R), lerp(BLAST_P)); this.end(now); return; }
+    const dur = kind === 'hole' ? HOLE_MS : lerp(WIND_MS);
+    this.ev = { kind, t0: now, end: now + dur, k, range: kind === 'hole' ? lerp(HOLE_R) : WIND_H, captured: 0, limit: Math.round(lerp(HOLE_CAPTURE)), vmax: lerp(WIND_VMAX) };
+    this.refreshNear();
+    // 상승 바람: 이벤트 동안 입구 닫음 (자리가 빌 때까지 재시도). 블랙홀: 흡수 반경이 입구를 덮고 중심이 공을 계속 끌어올리므로 막 없이 진행
+    if (kind === 'wind') { this.lidAt = now; this.lidHold = dur + LID_AFTER_MS; this.lidGiveUp = now + dur; }
+    this.guardUntil = now + dur + GUARD_MS;
+    if (kind === 'hole') { this.hole.setVisible(true).setScale(0.2); this.holePull.setVisible(true); this.h.scene.tweens.add({ targets: this.hole, scale: 1, duration: 300 }); }
+    else this.wind.setVisible(true).setAlpha(0);
+  }
+
+  /** 속도 안전장치: 후보 목록의 공만 검사 */
+  private guard(): void {
+    for (const b of this.near) {
+      if (b.removed) continue;
+      const v = b.go.body.velocity, sp = Math.hypot(v.x, v.y);
+      if (sp > GUARD_CAP) b.go.setVelocity((v.x / sp) * GUARD_CAP, (v.y / sp) * GUARD_CAP);
+    }
+  }
+
+  /** 이벤트 종료 처리 (쿨타임 시작) */
+  private end(now: number): void {
+    this.readyAt = now + COOLDOWN_MS + COOLDOWN_STEP_MS * (this.stats.events.length - 1);
+  }
+
+  /** 이벤트 대상 후보: 입구 위 영향 범위 안의 진행 중 공 (주기적 갱신 → 매 스텝 전체 순회 없음) */
+  private refreshNear(): void {
+    const e = this.ev!, top = this.h.gateY - e.range - 80;
+    this.near = this.h.balls.filter((b) => this.active(b) && b.go.y > top);
+  }
+
+  /** 진행 중 이벤트 1스텝 */
+  private run(now: number): void {
+    const e = this.ev!;
+    if (now >= e.end) { this.finishEv(now); return; }
+    if (++this.steps >= SCAN_STEPS) { this.steps = 0; this.refreshNear(); }
+    const { rng, gateY } = this.h;
+    if (e.kind === 'hole') {
+      const hx = this.cx, hy = gateY - HOLE_UP, R = e.range;
+      let moved = 0;
+      this.band = null;
+      for (const b of this.near) {
+        if (!this.active(b) || this.warped.has(b)) continue;
+        const dx = hx - b.go.x, dy = hy - b.go.y, d = Math.hypot(dx, dy);
+        if (d > R) continue;
+        if (d < HOLE_CATCH && e.captured < e.limit) {
+          if (moved < HOLE_PER_STEP && this.capture(b)) { moved++; e.captured++; }
+          continue;
+        }
+        if (e.captured >= e.limit) continue; // 흡수 한도 도달 → 더 끌어당기지 않음
+        const a = 0.35 + 0.55 * (1 - d / R), v = b.go.body.velocity;
+        this.setV(b, v.x * 0.96 + (dx / (d || 1)) * a, v.y * 0.96 + (dy / (d || 1)) * a, HOLE_VMAX);
+      }
+      if (e.captured >= e.limit && e.end - now > 400) e.end = Math.max(now + 400, e.t0 + HOLE_MIN_SHOW); // 한도 도달 → 최소 표시 시간 후 종료
+    } else {
+      const k = e.k;
+      for (const b of this.near) {
+        if (!this.active(b)) continue;
+        const up = gateY - b.go.y;
+        if (up < 0 || up > WIND_H || Math.abs(b.go.x - this.cx) > this.h.gap / 2 + up + this.h.R) continue;
+        const v = b.go.body.velocity, acc = WIND_ACC + 0.3 * (1 - up / WIND_H) + 0.2 * k; // 입구에 가까울수록 강하게 → 앞줄 공이 가장 높이
+        const vy = Math.max(-e.vmax, v.y - acc);
+        this.setV(b, v.x * 0.98 + rng.range(-WIND_TURB, WIND_TURB), vy, WIND_CAP);
+      }
+    }
+  }
+
+  /** 블랙홀 흡수: 맵 중간 높이의 안전한 빈 자리로 이동 (구조물·포털·다른 공과 겹치지 않는 위치만) */
+  private capture(b: GbBall): boolean {
+    const { rng, R, midY } = this.h;
+    if (!this.spots.length) { this.stats.captureFail++; return false; }
+    // 겹침 검사 대상: 이동 구역 근처 공만 (스텝당 1회 생성, 이동한 공은 추가)
+    const band = (this.band ??= this.h.balls.filter((o) => !o.removed && o.go.y > midY[0] - R * 3 && o.go.y < midY[1] + R * 3));
+    for (let k = 0; k < 14; k++) {
+      const sp = this.spots[rng.int(this.spots.length)], x = sp.x + rng.range(-6, 6), y = sp.y + rng.range(-6, 6); // 같은 격자점에 몰리지 않게 살짝 흩뜨림
+      if (band.some((o) => o !== b && !o.removed && Math.abs(o.go.y - y) < R * 3 && (o.go.x - x) ** 2 + (o.go.y - y) ** 2 < (R * 2 + 10) ** 2)) continue;
+      if (!this.h.isFree(x, y, R + 8)) continue; // 최종 확인 (활성 망치 등 움직이는 구조물 포함)
+      if (this.h.teleport(b, x, y, HOLE_COLOR)) {
+        this.warped.add(b);
+        band.push(b);
+        this.pop(b.go.x, b.go.y);
+        this.stats.captured++;
+        this.stats.events[this.stats.events.length - 1].hit++;
+        return true;
+      }
+    }
+    this.stats.captureFail++;
+    return false;
+  }
+
+  private finishEv(now: number): void {
+    const e = this.ev!;
+    if (e.kind === 'hole') {
+      this.h.scene.tweens.add({ targets: this.hole, scale: 0.1, duration: 250, onComplete: () => this.hole.setVisible(false) });
+      this.holePull.setVisible(false);
+    } else this.wind.setVisible(false);
+    if (e.kind === 'wind') this.stats.events[this.stats.events.length - 1].hit = this.near.length;
+    this.ev = null; // near 는 속도 안전장치가 끝날 때까지 유지
+    this.lidUntil = Math.min(this.lidUntil || Infinity, now + LID_AFTER_MS);
+    this.end(now);
+  }
+
+  private setV(b: GbBall, vx: number, vy: number, cap: number): void {
+    const sp = Math.hypot(vx, vy);
+    if (sp > cap) { vx = (vx / sp) * cap; vy = (vy / sp) * cap; }
+    this.h.wake(b);
+    b.go.setVelocity(vx, vy);
+  }
+
+  /** 💥 초강력 폭발: 1단계 더미 팽창(먼 공일수록 빠르게) → 2단계 앞줄 공 수직 발사 → 입구 막 */
+  private blast(now: number, range: number, power: number): void {
+    const { rng, gateY } = this.h, cy = gateY + 8;
+    let hit = 0;
     this.kick = [];
     for (const b of this.h.balls) {
-      if (b.record.finishTime !== null) { done++; continue; }
-      if (b.removed || this.passed(b)) continue;
-      const dx = b.go.x - cx, dy = b.go.y - cy;
+      if (!this.active(b)) continue;
+      const dx = b.go.x - this.cx, dy = b.go.y - cy;
       if (dy < -range || dy > 0) continue;
       const d = Math.hypot(dx, dy);
       if (d > range || d < 1) continue;
-      cand.push({ b, d });
-      if (this.h.dry) continue;
       let a: number, sp: number;
-      if (d < FRONT_R) {
-        // 1단계: 앞줄 공은 위로 살짝만 (2단계에서 수직 발사)
-        a = -Math.PI / 2 + rng.range(-0.3, 0.3);
-        sp = power * 0.3;
-        this.kick.push(b);
-      } else {
-        // 나머지: 바깥(먼) 공일수록 빠르게 → 더미가 압축되지 않고 팽창하며 위·옆으로 흩어짐
-        a = Math.atan2(dy, dx) + rng.range(-JITTER, JITTER);
-        sp = power * (0.55 + 0.45 * (d / range)) * rng.range(0.65, 1.15);
-      }
+      if (d < FRONT_R) { a = -Math.PI / 2 + rng.range(-0.3, 0.3); sp = power * 0.3; this.kick.push(b); }
+      else { a = Math.atan2(dy, dx) + rng.range(-BLAST_JITTER, BLAST_JITTER); sp = power * (0.55 + 0.45 * (d / range)) * rng.range(0.65, 1.15); }
       a = Math.min(-0.25, Math.max(-Math.PI + 0.25, a)); // 항상 위쪽 성분 (판 아래로 파고들지 않게)
-      sp = Math.min(SPEED_CAP, sp);
-      this.h.wake(b);
-      b.go.setVelocity(Math.cos(a) * sp, Math.sin(a) * sp);
+      this.setV(b, Math.cos(a) * sp, Math.sin(a) * sp, BLAST_CAP);
       hit++;
     }
-    this.stats.snaps.push({ base: done, front: cand.sort((p, q) => p.d - q.d).slice(0, 10).map((c) => c.b) });
-    this.stats.bursts.push({ t: Math.round(now), n: s.n, fill: +s.fill.toFixed(3), avgV: +s.avgV.toFixed(2), range: Math.round(range), power: +power.toFixed(2), hit });
-    this.congested = 0;
-    this.readyAt = now + COOLDOWN_MS + COOLDOWN_STEP_MS * (this.stats.bursts.length - 1);
-    if (this.h.dry) return;
+    this.stats.events[this.stats.events.length - 1].hit = hit;
+    this.near = this.h.balls.filter((b) => this.active(b) && this.h.gateY - b.go.y < range + 80); // 속도 안전장치 대상
     this.kickPower = power;
     this.kickAt = now + KICK_DELAY_MS;
-    this.lidAt = now + LID_DELAY_MS;
-    this.burstFx(cx, gateY, range);
-    this.say('💥 역전 충격파!', '#ff5a36');
+    this.lidAt = now + BLAST_LID_DELAY; this.lidHold = BLAST_LID_MS; this.lidGiveUp = this.lidAt + LID_RETRY_MS;
+    this.guardUntil = now + GUARD_MS;
+    this.blastFx(range);
   }
 
-  /** 매 프레임: 충전 표시 (그래픽 1개만 사용) */
+  private kickFront(): void {
+    const { rng } = this.h;
+    for (const b of this.kick) {
+      if (!this.active(b)) continue;
+      const a = -Math.PI / 2 + rng.range(-0.35, 0.35);
+      this.setV(b, Math.cos(a) * this.kickPower * rng.range(0.95, 1.1), Math.sin(a) * this.kickPower * rng.range(0.95, 1.1), BLAST_CAP);
+    }
+    this.kick = []; this.kickAt = -1;
+  }
+
+  /** 입구 에너지 막 설치·해제 (공이 걸쳐 있으면 잠시 재시도, 끝내 막혀 있으면 생략) */
+  private lidStep(now: number): void {
+    const { scene, gateY, gap, R } = this.h;
+    if (this.lid && now >= this.lidUntil) { scene.matter.world.remove(this.lid); this.lid = null; this.lidView.setVisible(false); }
+    if (this.lidAt < 0 || now < this.lidAt) return;
+    const ly = gateY - LID_UP, hw = (gap + LID_W_PAD) / 2;
+    const blocked = this.h.balls.some((b) => !b.removed && b.record.finishTime === null && Math.abs(b.go.y - ly) < LID_H / 2 + R && Math.abs(b.go.x - this.cx) < hw + R);
+    if (blocked) { if (now > this.lidGiveUp) { this.lidAt = -1; this.stats.lidSkipped++; } return; }
+    if (!this.lid) this.lid = scene.matter.add.rectangle(this.cx, ly, hw * 2, LID_H, { isStatic: true, restitution: 0.1, friction: 0.01 }) as unknown as MatterJS.BodyType;
+    this.lidUntil = now + this.lidHold;
+    this.lidAt = -1;
+    this.lidView.setVisible(true);
+    this.stats.lids++;
+  }
+
+  /** 매 프레임: 표시 객체의 크기·투명도·회전만 변경 */
   draw(now: number): void {
-    const g = this.g; g.clear();
-    if (this.lid) { // 입구 에너지 막 (깜박임 → 열리기 직전 빠르게)
-      const left = (this.lidUntil - now) / LID_MS, blink = 0.5 + 0.5 * Math.sin((now / 1000) * (left < 0.3 ? 40 : 12));
-      const hw = (this.h.gap + LID_W_PAD) / 2, ly = this.h.gateY - LID_UP;
-      g.fillStyle(0x7ff3ff, 0.45 + 0.45 * blink).fillRect(this.h.W / 2 - hw, ly - LID_H / 2, hw * 2, LID_H)
-        .lineStyle(2, 0xffffff, 0.9).strokeRect(this.h.W / 2 - hw, ly - LID_H / 2, hw * 2, LID_H);
+    if (this.lid) this.lidView.setAlpha(0.5 + 0.45 * (0.5 + 0.5 * Math.sin((now / 1000) * ((this.lidUntil - now) < 450 ? 40 : 12))));
+    const e = this.ev;
+    if (e?.kind === 'hole') {
+      this.hole.setRotation(-now / 160);
+      const p = ((now - e.t0) % 700) / 700;
+      this.holePull.setScale(1 - 0.85 * p).setAlpha(0.2 + 0.7 * p);
+    } else if (e?.kind === 'wind') {
+      this.wind.setAlpha(Math.min(1, (now - e.t0) / 200, (e.end - now) / 200));
+      this.windStreaks.setY(((now - e.t0) * -0.9) % 120);
     }
     if (this.chargeAt < 0) return;
-    const p = Phaser.Math.Clamp((now - this.chargeAt) / CHARGE_MS, 0, 1);
-    const { W, gateY } = this.h, cx = W / 2, cy = gateY - 10;
-    const pulse = 0.5 + 0.5 * Math.sin((now / 1000) * (10 + 20 * p));
-    const r0 = RANGE_MIN + (RANGE_MAX - RANGE_MIN) * 0.5;
-    g.fillStyle(0xff5a36, 0.08 + 0.12 * p * pulse).fillCircle(cx, cy, r0 * (1 - 0.7 * p))         // 수축하는 경고 원
-      .lineStyle(4, 0xffd166, 0.5 + 0.5 * pulse).strokeCircle(cx, cy, r0 * (1 - 0.7 * p))
-      .fillStyle(0xfff1b8, 0.6 + 0.4 * pulse).fillCircle(cx, cy, 8 + 18 * p);                     // 커지는 에너지 핵
-    for (let i = 0; i < 8; i++) { // 중심으로 모이는 에너지 줄기
-      const t = (i * Math.PI) / 4 + now / 400, r1 = r0 * (1 - p) + 30, r2 = r1 - 26;
-      g.lineStyle(3, 0xffd166, 0.9).lineBetween(cx + Math.cos(t) * r1, cy + Math.sin(t) * r1, cx + Math.cos(t) * r2, cy + Math.sin(t) * r2);
-    }
+    const p = Phaser.Math.Clamp((now - this.chargeAt) / CHARGE_MS, 0, 1), pulse = 0.5 + 0.5 * Math.sin((now / 1000) * (10 + 20 * p));
+    this.warn.setScale(1 - 0.7 * p).setAlpha(0.5 + 0.5 * pulse);
+    this.core.setScale((8 + 18 * p) / 26).setAlpha(0.6 + 0.4 * pulse);
+    this.rays.setScale(1 - 0.85 * p).setRotation(now / 400);
   }
 
-  /** 경기 종료: 표시 정리, 이후 발동 없음 */
+  /** 경기 종료: 표시·물리 정리, 이후 발동 없음 */
   stop(): void {
-    this.stopped = true; this.chargeAt = -1; this.lidAt = -1; this.kickAt = -1; this.kick = []; this.g.clear();
+    this.stopped = true; this.chargeAt = -1; this.lidAt = -1; this.kickAt = -1; this.kick = []; this.ev = null; this.near = [];
+    this.showCharge(false); this.lidView.setVisible(false); this.hole.setVisible(false); this.holePull.setVisible(false); this.wind.setVisible(false);
     if (this.lid) { this.h.scene.matter.world.remove(this.lid); this.lid = null; }
   }
 
-  private burstFx(x: number, y: number, range: number): void {
-    const sc = this.h.scene;
-    const flash = sc.add.circle(x, y, range * 0.45, 0xfff1b8, 0.85).setDepth(8);
-    sc.tweens.add({ targets: flash, alpha: 0, scale: 1.8, duration: 320, onComplete: () => flash.destroy() });
-    [[0xffffff, 8, 0, 420], [0xff5a36, 6, 90, 560], [0xffd166, 4, 180, 700]].forEach(([c, w, delay, dur]) => {
-      const ring = sc.add.circle(x, y, 16).setStrokeStyle(w, c).setDepth(8);
-      sc.tweens.add({ targets: ring, radius: range, alpha: 0, delay, duration: dur, onComplete: () => ring.destroy() });
-    });
-    sc.cameras.main.shake(260, 0.006);
+  /** 블랙홀 이동 위치 표시: 고리 풀을 돌려 씀 (새 객체 생성 없음) */
+  private pop(x: number, y: number): void {
+    const c = this.pops[this.popNext++ % POP_POOL], sc = this.h.scene;
+    sc.tweens.killTweensOf(c);
+    c.setPosition(x, y).setScale(0.2).setAlpha(1).setVisible(true);
+    sc.tweens.add({ targets: c, scale: 1, alpha: 0, duration: 450, onComplete: () => c.setVisible(false) });
   }
 
-  private say(text: string, color: string): void {
-    const sc = this.h.scene;
-    sc.tweens.killTweensOf(this.banner);
-    this.banner.setText(text).setColor(color).setAlpha(1);
-    sc.tweens.add({ targets: this.banner, alpha: 0, delay: 1100, duration: 300 });
+  private showCharge(on: boolean): void { this.warn.setVisible(on); this.core.setVisible(on); this.rays.setVisible(on); }
+
+  /** 폭발 효과: 미리 만든 섬광·고리 3개·화면 섬광 재사용 (scale 트윈 → 도형 재계산 없음) + 화면 흔들림 */
+  private blastFx(range: number): void {
+    const sc = this.h.scene, M = BLAST_R[1];
+    sc.tweens.killTweensOf([this.flash, this.screen, ...this.rings]);
+    this.flash.setScale(range / M).setAlpha(0.9).setVisible(true);
+    sc.tweens.add({ targets: this.flash, alpha: 0, scale: (range / M) * 1.8, duration: 360, onComplete: () => this.flash.setVisible(false) });
+    [[0, 450], [90, 600], [180, 760]].forEach(([delay, dur], i) => {
+      const ring = this.rings[i].setScale(16 / M).setAlpha(1).setVisible(true);
+      sc.tweens.add({ targets: ring, scale: range / M, alpha: 0, delay, duration: dur, onComplete: () => ring.setVisible(false) });
+    });
+    this.screen.setAlpha(0.45);
+    sc.tweens.add({ targets: this.screen, alpha: 0, duration: 280 });
+    sc.cameras.main.shake(380, 0.014);
+  }
+
+  private say(kind: 'charge' | GateEventKind): void {
+    const sc = this.h.scene, all = Object.values(this.banners), b = this.banners[kind];
+    sc.tweens.killTweensOf(all);
+    for (const x of all) x.setAlpha(0);
+    b.setAlpha(1);
+    sc.tweens.add({ targets: b, alpha: 0, delay: 1100, duration: 300 });
+  }
+
+  private fade(t: Phaser.GameObjects.Text): void {
+    this.h.scene.tweens.killTweensOf(t);
+    this.h.scene.tweens.add({ targets: t, alpha: 0, duration: 200 });
   }
 }
