@@ -97,8 +97,8 @@ export const CONFIG = {
     // 반전 경기만 적용. 기존 스킬/쿨타임은 그대로 두고 돌아오는 구간 주행속도를 미세 보정.
     // 승자 미리 지정/순위 조작 없음. 밸런스 테스트로 10명 각각 비슷한 우승 확률에 접근.
     speedFactor: {
-      yappu: 0.990, harunotsuki: 0.996, manjo: 1.006, moya: 1.001, yuntami: 1.005,
-      yamuji: 1.042, nanwony: 1.013, kkutinho: 1.018, kimokdok: 0.975, damyu: 0.990,
+      yappu: 0.98997, harunotsuki: 0.996, manjo: 1.00753, moya: 1.00196, yuntami: 1.0053,
+      yamuji: 1.04026, nanwony: 1.01376, kkutinho: 1.01876, kimokdok: 0.97397, damyu: 0.9885,
     } as Record<CharId, number>,
   },
 

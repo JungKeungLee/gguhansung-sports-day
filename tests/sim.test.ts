@@ -272,8 +272,8 @@ describe('결승선 이동', () => {
 });
 
 describe('일반/반전 세계 미세 속도 보정', () => {
-  it('일반 경기 속도 계수가 실제 이동에 반영되며 시드가 같으면 재현 가능', () => {
-    const ids = ['yappu', 'moya'] as const;
+  it('10인 경기 일반 속도 계수가 실제 이동에 반영되며 시드가 같으면 재현 가능', () => {
+    const ids = ALL;
     const a = new Race([...ids], 4142, cfgNoEvents);
     const boosted = { ...cfgNoEvents, normalSpeedFactor: { ...cfgNoEvents.normalSpeedFactor, yappu: 1.05 } };
     const b = new Race([...ids], 4142, boosted);
