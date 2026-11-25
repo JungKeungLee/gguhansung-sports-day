@@ -300,6 +300,22 @@ describe('AI 보류 규칙', () => {
 });
 
 describe('필살기 발동 구조 (2차)', () => {
+  it('야뿌 콜라 대폭발: 10인전 대부분에서 사용하고 중복 발동하지 않음', () => {
+    const ult = CHARACTERS.find((c) => c.id === 'yappu')!.ult;
+    expect(ult.trigger).toEqual([0.25, 0.65]);
+    expect(ult.desc).toContain('36%');
+    expect(ult.desc).toContain('18%');
+
+    let used = 0;
+    for (let s = 0; s < 100; s++) {
+      const race = new Race(ALL, (s * 2654435761) >>> 0).runToEnd();
+      const yappu = r(race, 'yappu');
+      if (yappu.ultUsed) used++;
+      expect(race.events.filter((e) => e.type === 'ult' && e.actor === yappu.index).length).toBeLessThanOrEqual(1);
+    }
+    expect(used).toBeGreaterThanOrEqual(85);
+  });
+
   it('필살기를 못 쓰고 끝나는 경우가 존재하고, 경기당 최대 1회', () => {
     let used = 0, total = 0;
     for (let s = 0; s < 150; s++) {

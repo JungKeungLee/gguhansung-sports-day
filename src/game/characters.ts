@@ -11,7 +11,7 @@ export const CHARACTERS: CharDef[] = [
       { id: 'yappu_dentist', name: '치과 가는 길', desc: '바로 앞 1명 1.5초간 25% 감속', cooldown: 10, fx: 'cola',
         actions: [{ type: 'slow', target: 'nearestAhead', value: 0.25, dur: 1.5, maxRange: 20 }] },
     ],
-    ult: { id: 'yappu_ult', name: '콜라 대폭발', cutin: '탄산 한계 돌파!!', desc: '4초간 속도 60% 증가 + 주변 2초간 30% 감속', cooldown: 0, fx: 'cola',
+    ult: { id: 'yappu_ult', name: '콜라 대폭발', cutin: '탄산 한계 돌파!!', trigger: [0.25, 0.65], desc: '4초간 속도 36% 증가 + 주변 2초간 18% 감속', cooldown: 0, fx: 'cola',
       actions: [{ type: 'boost', value: 0.6, dur: 4 }, { type: 'slow', target: 'around', radius: 6, value: 0.3, dur: 2 }] },
   },
   {
