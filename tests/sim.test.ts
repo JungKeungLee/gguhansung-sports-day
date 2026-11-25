@@ -271,7 +271,21 @@ describe('결승선 이동', () => {
   });
 });
 
-describe('반전 세계 전용 속도 보정', () => {
+describe('일반/반전 세계 미세 속도 보정', () => {
+  it('일반 경기 속도 계수가 실제 이동에 반영되며 시드가 같으면 재현 가능', () => {
+    const ids = ['yappu', 'moya'] as const;
+    const a = new Race([...ids], 4142, cfgNoEvents);
+    const boosted = { ...cfgNoEvents, normalSpeedFactor: { ...cfgNoEvents.normalSpeedFactor, yappu: 1.05 } };
+    const b = new Race([...ids], 4142, boosted);
+    for (const race of [a, b]) {
+      race.obstaclesByLane.forEach((lane) => lane.length = 0);
+      race.runners.forEach((x) => { x.cds = [999, 999]; x.gauge = 0; x.wobbleNext = 999; });
+      race.kkuroPlan.done = true;
+      race.step();
+    }
+    expect(b.runners[0].pos).toBeGreaterThan(a.runners[0].pos);
+  });
+
   it('반전 중에는 실제 이동속도만 조금 달라지고 출발점 결승은 유지', () => {
     const normal = new Race(['yappu', 'moya'], 712, cfgNoEvents);
     const boostedCfg = { ...cfgNoEvents, reverseWorld: {
