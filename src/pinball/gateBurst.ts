@@ -24,9 +24,9 @@ const FIRE_MIN_N = 4;          // 충전 끝 시점에 이보다 적으면 취�
 const FULL_N = 60;             // 이 개수 이상 몰리면 이벤트 세기 최대 (세기 k = 0~1)
 const CHARGE_MS = 1200;        // 충전(경고) 표시 → 그 뒤 발동
 // ───── 연속 발동 방지 ─────
-const COOLDOWN_MS = 8000;      // 이벤트 종료 후 최소 대기
-const COOLDOWN_STEP_MS = 2000; // 발동할 때마다 대기 증가
-const MAX_EVENTS = 3;       // 반복 반동 감소: 결승 이벤트 최대 6→3회          // 경기당 최대 발동 → 모든 공이 결국 통과
+const COOLDOWN_MS = 6500;      // 장시간 아무 이벤트도 나오지 않는 구간 단축      // 이벤트 종료 후 최소 대기
+const COOLDOWN_STEP_MS = 300;  // 후속 이벤트가 갈수록 심하게 늦어지는 현상 방지 // 발동할 때마다 대기 증가
+const MAX_EVENTS = 12;        // 3회 종료 문제 해결; 무한 반복 방지용 상한 유지
 // ───── 입구 에너지 막 (이벤트 중 입구를 닫아, 흩어진 공이 다시 섞인 뒤 통과) ─────
 const LID_W_PAD = 30, LID_H = 10, LID_UP = 8; // 폭 = 입구 폭+30 (양쪽 깔때기 판에 걸침), 두께 10, 입구 위 8px
 const LID_RETRY_MS = 400;      // 막 자리에 공이 걸쳐 있으면 재시도, 그래도 막혀 있으면 이번 회차 생략 (겹침·끼임 방지)
@@ -234,7 +234,7 @@ export class GateBurst {
   }
 
   private pick(): GateEventKind {
-    // 첫 유효 발동은 폭발 확정. 그 후에만 블랙홀·바람 추첨 (QA 강제 종류 우선).
+    // 첫 폭발 후 바람과 블랙홀도 실제로 나올 기회 보장, 이후 무작위 (QA 강제 종류 우선).
     return chooseGateEvent(this.stats.events.length, () => this.h.rng.next(), this.h.force);
   }
 
@@ -251,10 +251,10 @@ export class GateBurst {
     }
     let kind = this.pick();
     const k = Phaser.Math.Clamp((s.n - JAM_N) / (FULL_N - JAM_N), 0, 1);
-    if (kind === 'hole' && !this.h.force) { // 이동 가능한 공이 거의 없으면 폭발·상승 바람 중 하나 (40:30 비율 유지)
+    if (kind === 'hole' && !this.h.force) { // 블랙홀 대상이 적으면 바람으로 대체 (폭발만 반복하지 않도록)
       let targets = 0;
       for (const b of this.h.balls) if (targets < HOLE_MIN_TARGETS && this.active(b) && !this.warped.has(b) && Math.hypot(b.go.x - this.cx, b.go.y - (this.h.gateY - HOLE_UP)) < HOLE_TARGET_R) targets++;
-      if (targets < HOLE_MIN_TARGETS) kind = this.h.rng.next() < 4 / 7 ? 'blast' : 'wind';
+      if (targets < HOLE_MIN_TARGETS) kind = 'wind';
     }
     // 기록: 입구에 가까운 10개 (= 원래 곧 도착할 공)
     const near: { b: GbBall; d: number }[] = [];

@@ -96,14 +96,16 @@ describe('쉼표 구분 입력', () => {
 });
 
 describe('핀볼 결승 이벤트·튕김 감소', () => {
-  it('첫 유효 이벤트는 폭발이고, 이후에만 바람·블랙홀이 나올 수 있음', () => {
+  it('첫 폭발 후 바람·블랙홀 기회를 보장하고, 그 후에는 세 종류를 추첨', () => {
     let rolls = 0;
     const random = () => { rolls++; return 0.99; };
     expect(chooseGateEvent(0, random)).toBe('blast');
-    expect(rolls).toBe(0); // 첫 이벤트는 난수 미소비
-    expect(chooseGateEvent(1, () => 0.2)).toBe('blast');
-    expect(chooseGateEvent(1, () => 0.5)).toBe('hole');
     expect(chooseGateEvent(1, random)).toBe('wind');
+    expect(chooseGateEvent(2, random)).toBe('hole');
+    expect(rolls).toBe(0); // 첫 3회는 이벤트 유형 결정에 난수 미사용
+    expect(chooseGateEvent(3, () => 0.1)).toBe('blast');
+    expect(chooseGateEvent(3, () => 0.3)).toBe('hole');
+    expect(chooseGateEvent(3, random)).toBe('wind');
     expect(chooseGateEvent(0, random, 'wind')).toBe('wind'); // QA 강제 선택
   });
 
@@ -116,5 +118,22 @@ describe('핀볼 결승 이벤트·튕김 감소', () => {
       expect(p.plate).toBe(0.24);
       expect(p.rotor).toBe(0.28);
     }
+  });
+});
+
+describe('핀볼 마지막 회전막대 미리보기', () => {
+  it('중앙 입구 대신 왼쪽 경사선 안쪽에 길이 140px로 배치', async () => {
+    const { pinballPreview } = await import('../src/pinball/PinballScene');
+    const preview = pinballPreview('basic');
+    const finRotor = preview.shapes.find((s) => s.k === 'rotor' && s.y >= preview.finTop);
+    expect(finRotor).toBeDefined();
+    if (!finRotor || finRotor.k !== 'rotor') return;
+    expect(finRotor.len).toBe(140);
+    expect(finRotor.x).toBeLessThan(preview.W / 2);
+    expect(finRotor.y).toBeGreaterThan(preview.finTop);
+    expect(finRotor.y).toBeLessThan(preview.gateY);
+    const railX = preview.W / 2 - preview.finGap / 2 - (preview.gateY - finRotor.y);
+    const normalClearance = (finRotor.x - railX) / Math.SQRT2 - finRotor.len / 2 - finRotor.thick / 2 - 9;
+    expect(normalClearance).toBeGreaterThan(26); // 회전 반경과 경사판 사이에 공 한 개가 통과할 정도의 여유
   });
 });

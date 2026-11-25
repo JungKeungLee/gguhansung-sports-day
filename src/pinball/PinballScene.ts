@@ -46,6 +46,14 @@ const FLOW_BAND = 320;         // 결승 입구 위 이 높이 안의 공은 휴
 const QUEUE_TOP = 2550 + MAP_EXT + MAP_DY; // 이 아래(맵 하단~결승 깔때기)는 결승 대기 줄이 생기는 구역: 휴면 허용, 개별 끼임 복구는 줄이 멈췄을 때만
 const LABEL_POOL = 40;         // 이름표는 화면에 보이는 공에만, 최대 40개를 돌려 씀 (500개 대응)
 
+// 결승 막대 배치: 왼쪽 45° 경사 테두리의 고정축 지지대에 연결.
+// 회전 반경+막대 두께+공 반지름이 경사판에 닿지 않도록 중심을 안쪽으로 이격한다.
+function finishRotorMount(): { railX: number; x: number; y: number; len: number } {
+  const y = FIN_GATE_Y - 245;
+  const railX = W / 2 - FIN_GAP / 2 - (FIN_GATE_Y - y) / Math.tan((FIN_DEG * Math.PI) / 180);
+  return { railX, x: railX + 165, y, len: 140 };
+}
+
 // ───── 출발 분산 구역·결승 입구 배치 (게임 씬과 맵 미리보기가 같은 함수 사용 → 배치 일치) ─────
 type LayoutRect = (x: number, y: number, w: number, h: number, deg: number, kind: 'plate' | 'wall') => void;
 /** 출발 공간 아래 분산 구역: 엇갈린 핀 3줄 + 벽 반사판 */
@@ -70,9 +78,9 @@ function layoutFinishGate(rect: LayoutRect, rotor: (x: number, y: number, len: n
   const chuteH = FINISH_Y + 70 - (FIN_GATE_Y - 6);
   rect(W / 2 - FIN_GAP / 2 - 7, FIN_GATE_Y - 6 + chuteH / 2, 14, chuteH, 0, 'wall');
   rect(W / 2 + FIN_GAP / 2 + 7, FIN_GATE_Y - 6 + chuteH / 2, 14, chuteH, 0, 'wall');
-  // 회전 막대: 중앙 입구 대신 왼쪽 경사 테두리 안쪽으로 이동.
-  // 경사판과 공 지름 이상의 여유 공간 유지, 길이·회전속도를 낮춰 과도한 튕김과 끼임 방지.
-  rotor(WALL + 170, FIN_GATE_Y - 280, 60, 1.0, 1, 12);
+  // 140px 회전 막대(기존 60px): 왼쪽 경사 테두리에 지지대로 연결, 느리게 회전.
+  const mount = finishRotorMount();
+  rotor(mount.x, mount.y, mount.len, 0.85, 1, 14);
 }
 
 // ───── 맵 미리보기 (물리 없음, 설정 화면 SVG 용) ─────
@@ -247,10 +255,16 @@ export class PinballScene extends Phaser.Scene {
     layoutStartSpread((x, y, w, h, deg, kind) => this.staticRect(x, y, w, h, deg, this.theme[kind]), (x, y) => this.addPin(x, y, PIN_R, this.phys.pin));
   }
 
-  /** 결승 단일 입구: 깔때기·통로는 반발 0.05·정지마찰 0, 회전 막대는 반발 0.1 */
+  /** 결승 단일 입구: 깔때기·통로 반발 0.05, 왼쪽 테두리 지지대에 회전 막대 부착 */
   private buildFinishGate(): void {
     layoutFinishGate((x, y, w, h, deg, kind) => this.staticRect(x, y, w, h, deg, this.theme[kind], 0.05, true),
       (x, y, len, omega, arms, thick) => this.addRotor(x, y, len, omega, arms, thick, 0.1));
+    const m = finishRotorMount();
+    // 지지대는 시각 연출 전용: 물리 벽으로 만들면 공이 끼거나 다시 튕길 수 있어 충돌 없음.
+    const mountG = this.add.graphics().setDepth(1);
+    mountG.lineStyle(10, this.theme.wall, 1).lineBetween(m.railX, m.y, m.x, m.y);
+    mountG.lineStyle(3, this.theme.stroke, 1).lineBetween(m.railX, m.y, m.x, m.y);
+    mountG.fillStyle(this.theme.stroke, 1).fillCircle(m.railX, m.y, 8);
     this.add.text(W / 2, FIN_TOP - 30, '▼ FINISH GATE', { fontFamily: 'Arial Black, sans-serif', fontSize: '14px', color: '#ffd166' }).setOrigin(0.5).setDepth(1);
   }
 

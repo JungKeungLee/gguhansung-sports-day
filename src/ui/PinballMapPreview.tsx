@@ -26,10 +26,13 @@ export function PinballMapPreview({ mapId }: { mapId: MapId }) {
           case 'pin': return <circle key={i} cx={s.x} cy={s.y} r={s.r + 1} fill={hex(s.color)} />;
           case 'bumper': return <circle key={i} cx={s.x} cy={s.y} r={s.r} fill="#ff4d6d" stroke="#ffd166" strokeWidth={4} />;
           case 'rotor': return (
-            <g key={i} transform={`translate(${s.x} ${s.y})`}>
-              <circle r={s.len / 2} fill="#ffd166" opacity={0.12} />
-              {Array.from({ length: s.arms }, (_, a) => <rect key={a} x={-s.len / 2} y={-s.thick / 2} width={s.len} height={s.thick} fill="#ffd166" transform={`rotate(${(180 * a) / s.arms})`} />)}
-              <circle r={6} fill="#fff" />
+            <g key={i}>
+              {s.y >= pv.finTop && <line x1={pv.W / 2 - pv.finGap / 2 - (pv.gateY - s.y)} y1={s.y} x2={s.x} y2={s.y} stroke={hex(t.stroke)} strokeWidth={8} />}
+              <g transform={`translate(${s.x} ${s.y})`}>
+                <circle r={s.len / 2} fill="#ffd166" opacity={0.12} />
+                {Array.from({ length: s.arms }, (_, a) => <rect key={a} x={-s.len / 2} y={-s.thick / 2} width={s.len} height={s.thick} fill="#ffd166" transform={`rotate(${(180 * a) / s.arms})`} />)}
+                <circle r={6} fill="#fff" />
+              </g>
             </g>
           );
           case 'portal': return (
