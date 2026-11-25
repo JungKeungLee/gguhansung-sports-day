@@ -11,10 +11,9 @@ type Factors = Record<CharId, number>;
 const tune = (delta: number[], baseline: Factors): Factors => Object.fromEntries(ids.map((id,i)=>[id,Math.round((baseline[id] + delta[i]) * 10000)/10000])) as Factors;
 const baseForward=CONFIG.normalSpeedFactor,baseReverse=CONFIG.reverseWorld.speedFactor;
 const variants: Array<[string,number[],number[]]> = [
- ['baseline',[0,0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0,0]],
- ['mild',[-.005,0,0,0,-.001,.004,.003,.001,-.005,.004],[-.002,0,.003,.003,0,0,.002,0,-.004,-.002]],
- ['medium',[-.008,-.001,0,0,-.002,.008,.006,.002,-.008,.008],[-.003,0,.005,.006,.001,.001,.004,0,-.006,-.004]],
- ['strong',[-.010,-.002,0,.002,-.003,.011,.009,.003,-.011,.012],[-.004,0,.007,.009,.002,.002,.005,0,-.009,-.007]],
+ ['targetA',[.001,-.001,0,0,-.002,.003,0,0,-.003,0],[0,0,.001,.002,.002,0,0,0,-.003,-.003]],
+ ['targetB',[.002,-.001,0,0,-.003,.004,0,0,-.004,0],[0,0,.002,.003,.003,0,0,0,-.004,-.004]],
+ ['targetC',[.002,-.002,.001,0,-.002,.004,.001,-.001,-.005,-.001],[-.001,0,.003,.004,.003,0,.001,0,-.006,-.005]],
 ];
 for(const [name,df,dr] of variants) {
  const normalSpeedFactor=tune(df,baseForward),speedFactor=tune(dr,baseReverse);
