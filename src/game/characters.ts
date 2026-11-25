@@ -55,8 +55,9 @@ export const CHARACTERS: CharDef[] = [
       { id: 'yun_move', name: '완벽한 무빙', desc: '장애물 1개 회피 + 1.5초간 20% 가속', cooldown: 14, fx: 'aim',
         actions: [{ type: 'dodge', count: 1, window: 2.5 }, { type: 'boost', value: 0.2, dur: 1.5 }] },
     ],
-    ult: { id: 'yun_ult', name: '랭커의 집중력', cutin: 'CLUTCH!!', desc: '5초간 45% 가속 + 장애물 무시 + 감속 면역', cooldown: 0, fx: 'aim',
-      actions: [{ type: 'boost', value: 0.45, dur: 5 }, { type: 'immune', kind: 'obstacle', dur: 5 }, { type: 'immune', kind: 'debuff', dur: 5 }] },
+    ult: { id: 'yun_ult', name: '랭커의 집중력', cutin: 'CLUTCH!!', desc: '3초간 45% 가속 + 장애물 무시 + 감속 면역', cooldown: 0, fx: 'aim',
+      // 기본속도 2배(경기 시간 절반)로 5초 지속의 비중이 커져 우승률 25%대 → 지속 5→3초 (가속 배율·면역 구조 유지)
+      actions: [{ type: 'boost', value: 0.45, dur: 3 }, { type: 'immune', kind: 'obstacle', dur: 3 }, { type: 'immune', kind: 'debuff', dur: 3 }] },
   },
   {
     id: 'yamuji', name: '야무지', type: '전략형', color: '#8e44ad', accent: '#ecd3f7',

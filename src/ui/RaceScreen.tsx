@@ -8,10 +8,15 @@ import { Avatar } from './Avatar';
 import { type Comment, commentFor } from './commentary';
 import { sfx } from './sound';
 import { useSoundSettings } from './SoundPanel';
-import { EFFECT_IMAGES, FINISH_LABEL, type StadiumTheme, assetUrl, finishKind, uiUrl } from '../game/images';
+import { EFFECT_IMAGES, FINISH_LABEL, KKURO_IMAGE, type StadiumTheme, assetUrl, finishKind, uiUrl } from '../game/images';
 import { UiImg } from './UiImg';
 
-interface Cutin { id: number; actor: number; name: string; line: string }
+/** 컷인 대기열: 필살기와 꾸로의 괴롭힘을 같은 대기열에서 1개씩 표시 (겹치지 않음) */
+type Cutin =
+  | { kind: 'ult'; id: number; actor: number; name: string; line: string }
+  | { kind: 'kkuro'; id: number; hits: { actor: number; effect: 'slow' | 'push' | 'blocked' }[] };
+const KKURO_EFFECT = { slow: '😈 발 묶임', push: '💥 밀려남', blocked: '🛡️ 막음' } as const;
+const KKURO_COMMENT_MAX = 3; // 꾸로 개별 중계는 최대 3줄 (나머지는 요약 1줄 + 컷인 목록) → 중계창 도배 방지
 interface Toast { id: number; text: string; color: string }
 /** 이미지 배너 알림: skill=스킬 발동, overtake=선두 추월, first=1위 골인 */
 interface Notice { id: number; kind: 'skill' | 'overtake' | 'first'; who: string; text: string; color: string }
@@ -74,14 +79,15 @@ export function RaceScreen({ lineup, seed, theme, onDone, onExit, onSettings }: 
 
   const handleEvents = (evs: RaceEvent[]) => {
     const newComments: Comment[] = [];
+    let kkuroLines = 0;
     for (const e of evs) {
       const c = commentFor(e, defs);
-      if (c) newComments.push({ ...c, id: idRef.current++ });
+      if (c && !(e.type === 'kkuroHit' && ++kkuroLines > KKURO_COMMENT_MAX)) newComments.push({ ...c, id: idRef.current++ });
       switch (e.type) {
         case 'ult': {
           play('ult', 0);
           const d = defs[e.actor!];
-          const ci: Cutin = { id: idRef.current++, actor: e.actor!, name: d.ult.name, line: d.ult.cutin };
+          const ci: Cutin = { kind: 'ult', id: idRef.current++, actor: e.actor!, name: d.ult.name, line: d.ult.cutin };
           // 컷인은 1개씩 순서대로, 대기열이 차 있으면 작은 알림으로 대체 (화면 가림 방지)
           if (!cutinBusy.current) { cutinQueue.current.push(ci); showNextCutin(); }
           else if (cutinQueue.current.length < 1) cutinQueue.current.push(ci);
@@ -106,6 +112,16 @@ export function RaceScreen({ lineup, seed, theme, onDone, onExit, onSettings }: 
           if (!firstShown.current) { firstShown.current = true; pushNotice('first', e.actor!, `${e.value!.toFixed(3)}초 골인!`, 2600); }
           break;
         case 'cheer': play('cheer'); break;
+        case 'kkuroHit': play('debuff'); break;
+        case 'kkuro': {
+          // 경기당 1회: 같은 묶음의 개별 결과로 대상 목록 구성. 필살기 컷인 대기열 맨 앞에 넣어 반드시 1회 표시 (진행 중 컷인 뒤)
+          const hits = evs.filter((x) => x.type === 'kkuroHit' && x.t === e.t)
+            .map((x) => ({ actor: x.target!, effect: x.label as 'slow' | 'push' | 'blocked' }));
+          play('finishMove', 0);
+          cutinQueue.current.unshift({ kind: 'kkuro', id: idRef.current++, hits });
+          if (!cutinBusy.current) showNextCutin();
+          break;
+        }
         case 'leadChange': play('overtake', 0); setLeaderFlash((x) => x + 1); pushNotice('overtake', e.actor!, '선두로 올라섭니다!'); break;
         case 'finishMove':
           play('finishMove', 0);
@@ -180,8 +196,9 @@ export function RaceScreen({ lineup, seed, theme, onDone, onExit, onSettings }: 
           <span className="finished-count">완주 {finishedCount}/{n}</span>
           <div className="speed-panel">
             <UiImg name="speed" />
-            {[1, 2].map((v) => (
-              <button key={v} className={`sp-btn sp${v}${speed === v ? ' on' : ''}`} aria-label={`${v}배속`} aria-pressed={speed === v}
+            {/* 배속: 1x / 3x (버튼 위치 클래스 sp1·sp2는 이미지 칸 기준) */}
+            {[1, 3].map((v, i) => (
+              <button key={v} className={`sp-btn sp${i + 1}${speed === v ? ' on' : ''}`} aria-label={`${v}배속`} aria-pressed={speed === v}
                 onClick={() => { speedRef.current = v; setSpeed(v); }} />
             ))}
             {/* 이미지의 '설정' 버튼 자리 = 사운드 설정창 (경기는 계속 진행) */}
@@ -237,7 +254,25 @@ export function RaceScreen({ lineup, seed, theme, onDone, onExit, onSettings }: 
         ))}
       </div>
 
-      {cutin && (() => {
+      {cutin?.kind === 'kkuro' && (
+        <div className="cutin kkuro" key={cutin.id}>
+          <div className="cutin-band">
+            <img className="kkuro-img" src={assetUrl(KKURO_IMAGE)} alt="꾸로" onError={(ev) => { ev.currentTarget.style.display = 'none'; }} />
+            <div className="cutin-text">
+              <div className="cutin-name">꾸로의 괴롭힘!</div>
+              <div className="kkuro-hits">
+                {cutin.hits.map((h) => (
+                  <span key={h.actor} className={`kkuro-hit ${h.effect}`} style={{ borderColor: defs[h.actor].color }}>
+                    <b>{defs[h.actor].name}</b> {KKURO_EFFECT[h.effect]}
+                  </span>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {cutin?.kind === 'ult' && (() => {
         const d = defs[cutin.actor];
         return (
           <div className="cutin" key={cutin.id} style={{ '--c': d.color, '--a': d.accent } as React.CSSProperties}>

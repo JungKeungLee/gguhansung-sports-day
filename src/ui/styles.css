@@ -147,6 +147,15 @@ img.avatar { border: none; border-radius: 0; object-fit: contain; background: tr
   100% { transform: skewY(-3deg) translateX(110%); opacity: 0; }
 }
 
+/* 꾸로의 괴롭힘 컷인 (필살기 컷인과 같은 자리·같은 대기열, 보라 띠) */
+.cutin.kkuro .cutin-band { --c: #5b2a86; padding-left: 40px; gap: 18px; }
+.kkuro-img { height: 118px; width: auto; transform: skewY(3deg); filter: drop-shadow(0 4px 6px rgba(0,0,0,.5)); }
+.cutin.kkuro .cutin-name { font-size: 34px; color: #ffe066; }
+.kkuro-hits { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 4px; max-width: 1290px; } /* 최대 8명 1줄 (띠 높이 안에 제목+목록) */
+.kkuro-hit { font-size: 15px; font-weight: 700; color: #fff; background: rgba(0,0,0,.45); border: 2px solid; border-radius: 999px; padding: 1px 9px; white-space: nowrap; }
+.kkuro-hit.slow b, .kkuro-hit.push b, .kkuro-hit.blocked b { color: #fff; }
+.kkuro-hit.blocked { opacity: .75; }
+
 .toasts { position: absolute; left: 20px; top: 360px; z-index: 27; display: flex; flex-direction: column; gap: 8px; pointer-events: none; }
 .toast {
   background: rgba(10,10,20,.85); border-left: 8px solid; padding: 10px 18px; border-radius: 10px;

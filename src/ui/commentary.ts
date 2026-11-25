@@ -38,6 +38,13 @@ export function commentFor(e: RaceEvent, defs: CharDef[]): Omit<Comment, 'id'> |
         : e.to! >= 150 ? `💥 대연장! 결승선이 멀리 도망갑니다! ${e.from}m → ${e.to}m!!` : `🏁 결승선이 도망갑니다! ${e.from}m → ${e.to}m 연장!`,
     };
     case 'cheer': return { t: e.t, text: `👏 관중석 응원! 꼴찌 ${a}에게 힘이 납니다!`, tone: 'event' };
+    case 'kkuroHit': return e.label === 'slow' ? { t: e.t, text: `😈 꾸로의 괴롭힘! ${b}, 발이 묶였습니다!`, tone: 'bad' }
+      : e.label === 'push' ? { t: e.t, text: `💥 꾸로의 괴롭힘! ${b}, 뒤로 밀려납니다!`, tone: 'bad' }
+        : { t: e.t, text: `🛡️ ${b}, 꾸로의 괴롭힘을 막아냅니다!`, tone: 'normal' };
+    case 'kkuro': {
+      const [s, p, k] = (e.label ?? '0/0/0').split('/').map(Number);
+      return { t: e.t, text: `😈 꾸로의 괴롭힘! ${e.value}명 습격 — 발 묶임 ${s} · 밀려남 ${p}${k ? ` · 막음 ${k}` : ''}`, tone: 'event' };
+    }
     case 'leadChange': return { t: e.t, text: `🔥 ${a}, 선두로 올라섭니다!`, tone: 'event' };
     case 'finish': return { t: e.t, text: `🏃 ${a} 결승선 통과! (${e.value!.toFixed(3)}초)`, tone: 'finish' };
     case 'end': return { t: e.t, text: '🎉 전원 완주! 경기 종료!', tone: 'event' };

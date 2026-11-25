@@ -26,6 +26,8 @@ export class Race {
   finishPlan: { to: number; at: number; cancelled: boolean } = { to: 0, at: 0, cancelled: false };
   finishedCount = 0;
   cheerCount = 0;
+  /** 꾸로의 괴롭힘: 발동 지점(선두 진행거리)·발동 여부 (경기당 정확히 1회) */
+  kkuroPlan: { at: number; done: boolean } = { at: 0, done: false };
   nextId = 10000;
   done = false;
   forcedEnd = false;
@@ -62,6 +64,7 @@ export class Race {
     const to = this.rng.weighted(fm.outcomes.filter((o) => o.to <= cfg.maxFinish), (o) => o.w).to;
     const win = to < cfg.baseFinish ? fm.shortenWindow : fm.extendWindow;
     this.finishPlan = { to, at: this.rng.range(win[0], win[1]), cancelled: false };
+    this.kkuroPlan = { at: this.rng.range(cfg.kkuro.window[0], cfg.kkuro.window[1]), done: false };
     this.emit({ type: 'start' });
   }
 
