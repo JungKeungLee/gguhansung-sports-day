@@ -33,7 +33,8 @@ export function PinballMapPreview({ mapId }: { mapId: MapId }) {
           );
           case 'flipper': return (
             <g key={i}>
-              <line x1={s.railX} y1={s.y} x2={s.x} y2={s.y} stroke={hex(t.stroke)} strokeWidth={8} />
+              <line x1={s.railX} y1={s.railY} x2={s.x} y2={s.y} stroke={hex(t.stroke)} strokeWidth={6} opacity={0.55} />
+              <circle cx={s.x} cy={s.y} r={s.len + 2} fill="none" stroke={hex(t.accent)} strokeWidth={2} strokeDasharray="8 8" opacity={0.45} />
               <g transform={`translate(${s.x} ${s.y}) rotate(${s.angle * 180 / Math.PI})`}>
                 <rect x={0} y={-s.thick / 2} width={s.len} height={s.thick} rx={4} fill={hex(t.accent)} stroke="#e6fffc" strokeWidth={2} />
                 <circle cx={0} cy={0} r={12} fill={hex(t.accent)} stroke="#ffffff" strokeWidth={3} />

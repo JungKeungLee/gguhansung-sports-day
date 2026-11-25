@@ -141,19 +141,32 @@ describe('핀볼 결승 한쪽 끝 고정형 회전 날개와 공통 스타일',
       expect(map.theme.accent).toBeGreaterThan(0);
     }
   });
-  it('결승 날개는 왼쪽 경사선에 축이 붙고 길이 234px이며 입구와 충돌하지 않음', async () => {
-    const { finishFlipperMount } = await import('../src/pinball/maps');
-    const width = 800, gap = 46, gateY = 5000;
-    const flipper = finishFlipperMount(width, gap, gateY, 45);
-    expect(flipper.len).toBe(234);
-    expect(flipper.x).toBeLessThan(width / 2);
-    expect(flipper.x - flipper.railX).toBeCloseTo(14);
-    for (const angle of [0.22, 0.41, 0.60]) {
-      const tipX = flipper.x + Math.cos(angle) * flipper.len;
-      const tipY = flipper.y + Math.sin(angle) * flipper.len;
-      const edgeX = width / 2 - gap / 2 - (gateY - tipY);
-      expect(tipX - edgeX).toBeGreaterThan(35); // 공·경사판 사이 여유
-      expect(tipY).toBeLessThan(gateY - 25); // 좁은 입구를 직접 막지 않음
+  it('결승 회전 막대: 고정 축에서 360° 연속 회전, 모든 각도에서 경사판·핀·입구와 공 1개 이상 간격', async () => {
+    const { finishFlipperMount, finishFlipperAngle, FIN_ROTOR } = await import('../src/pinball/maps');
+    const width = 800, gap = 46, gateY = 5287, top = gateY - 337; // 실제 경기 좌표 (깔때기 높이 337px)
+    const f = finishFlipperMount(width, gap, gateY, 45);
+    expect(f.x).toBeLessThan(width / 2); // 왼쪽 절반에 축
+    // 각도: 일정하게 증가하며 0~2π 순환 (왕복 없음), 한 바퀴 = 2π/ω 초
+    const period = (2 * Math.PI) / FIN_ROTOR.omega * 1000;
+    let prev = finishFlipperAngle(0), turned = 0;
+    for (let t = 16.6667; t <= period * 1.5; t += 16.6667) {
+      const a = finishFlipperAngle(t);
+      expect(a).toBeGreaterThanOrEqual(0); expect(a).toBeLessThan(2 * Math.PI);
+      turned += ((a - prev) + 2 * Math.PI) % (2 * Math.PI); prev = a;
+    }
+    expect(turned).toBeGreaterThan(2 * Math.PI * 1.45); // 1.5초 주기 × 1.5 → 실제로 한 바퀴 이상
+    // 막대 끝(양 모서리 포함)이 어느 각도에서도: 왼쪽·오른쪽 경사판 표면과 32px 이상, 맵 마지막 핀(입구 위 424px) 아래 32px, 입구 위 100px 이상
+    const distL = (x: number, y: number) => (x - (width / 2 - gap / 2) + (gateY - y)) / Math.SQRT2 - 9;
+    const distR = (x: number, y: number) => ((width / 2 + gap / 2) - x + (gateY - y)) / Math.SQRT2 - 9;
+    for (let a = 0; a < 2 * Math.PI; a += 0.02) {
+      for (const side of [-1, 1]) {
+        const x = f.x + Math.cos(a) * f.len - Math.sin(a) * side * (f.thick / 2);
+        const y = f.y + Math.sin(a) * f.len + Math.cos(a) * side * (f.thick / 2);
+        expect(distL(x, y)).toBeGreaterThan(26 + 5);
+        expect(distR(x, y)).toBeGreaterThan(26 + 5);
+        expect(y).toBeGreaterThan(top - 87 + 7 + 26); // 핀 줄(입구 위 424px, 반지름 7) 아래 공 1개 이상
+        expect(y).toBeLessThan(gateY - 100);
+      }
     }
   });
 });

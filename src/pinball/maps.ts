@@ -27,11 +27,38 @@ export const PINBALL_MAPS: MapInfo[] = [
 ];
 export const mapInfo = (id: MapId) => PINBALL_MAPS.find((m) => m.id === id)!;
 
-/** 결승 날개 피벗 위치 계산 (브라우저/Phaser 없이 시뮬레이션·테스트 가능) */
-export function finishFlipperMount(viewW: number, gap: number, gateY: number, slopeDeg: number): { railX: number; x: number; y: number; len: number; thick: number } {
-  const y = gateY - 245;
-  const railX = viewW / 2 - gap / 2 - (gateY - y) / Math.tan((slopeDeg * Math.PI) / 180);
-  return { railX, x: railX + 14, y, len: 234, thick: 20 };
+// ───── 결승 회전 막대: 왼쪽 경사 쪽 고정 축을 중심으로 한쪽 끝을 축으로 360° 연속 회전 ─────
+// 한쪽 끝이 축이므로 막대가 그리는 원(반지름 = 길이 + 여유)이 경사판·맵 핀·입구와 겹치면 공이 끼거나 판을 뚫음
+// → 원 전체가 양쪽 경사판 표면에서 공 1개+여유(32px), 맵 마지막 핀 줄에서 32px 떨어지도록 축 위치를 계산.
+//   (기존 234px·경사선 14px 축은 360° 회전 시 왼쪽 벽·경사판·입구·핀 구역을 모두 통과 → 길이 100px로 조정)
+export const FIN_ROTOR = {
+  len: 100, thick: 20,
+  sweepPad: 12,      // 회전 원 반지름 = 길이 + 12 (막대 모서리·외곽선)
+  plateHalf: 9,      // 깔때기 판 두께 18의 절반
+  ballClear: 32,     // 회전 원과 판·핀 사이 최소 간격 (공 지름 26 + 6)
+  topAboveGate: 392, // 회전 원 꼭대기 한계: 입구 위 392px (맵 마지막 핀 줄 아래 32px)
+  omega: 1.5,        // rad/s, 일정 각속도 (끝 속도 약 2.5px/스텝, 기존 결승 회전 막대와 같은 수준)
+  start: 0.41,       // 시작 각도 (rad)
+};
+
+/** 결승 회전 막대 축·브래킷 위치 (브라우저/Phaser 없이 계산·테스트 가능). 축은 왼쪽 경사판에서 '회전 원 + 공 여유'만큼만 떨어진 가장 왼쪽 위치 */
+export function finishFlipperMount(viewW: number, gap: number, gateY: number, slopeDeg: number): { railX: number; railY: number; x: number; y: number; len: number; thick: number; sweep: number } {
+  const F = FIN_ROTOR, th = (slopeDeg * Math.PI) / 180;
+  const sweep = F.len + F.sweepPad;
+  const h = F.topAboveGate - sweep;                 // 축 높이 (입구 위)
+  const y = gateY - h;
+  const edge = viewW / 2 - gap / 2;                 // 왼쪽 경사선이 입구에 닿는 x
+  const D = sweep + F.plateHalf + F.ballClear;      // 축과 왼쪽 경사 중심선 사이 거리
+  const x = edge + (D - h * Math.cos(th)) / Math.sin(th);
+  // 장식 브래킷: 축에서 왼쪽 경사판 표면까지 수직선 (물리 없음, 공 뒤에 그림)
+  const s = D - F.plateHalf;
+  return { x, y, railX: x - Math.sin(th) * s, railY: y + Math.cos(th) * s, len: F.len, thick: F.thick, sweep };
+}
+
+/** 결승 회전 막대 각도: 일정 각속도로 증가, 0~2π 순환 (왕복 없음). tMs = 게임 시간 */
+export function finishFlipperAngle(tMs: number): number {
+  const a = FIN_ROTOR.start + FIN_ROTOR.omega * (tMs / 1000);
+  return ((a % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2);
 }
 
 /** 반발계수: 기본 맵은 유지하고 나머지 맵의 과도한 튕김만 완화 */
