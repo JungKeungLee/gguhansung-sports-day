@@ -12,10 +12,7 @@ const kim = CHAR_BY_ID.kimokdok.skills[0].actions[0] as { value: number };
 const yappu = CHAR_BY_ID.yappu.skills[0].actions[0] as { value: number };
 const yamuji = CHAR_BY_ID.yamuji.skills[1].actions[1] as { dur: number };
 const variants: Array<[string, [number, number, number, number, number, number, number, number]]> = [
- ['moderate', [.59,.44,.68,11.4,9.0,.28,.4,2.15]],
- ['fineA', [.62,.415,.68,11.4,9.0,.27,.42,2.2]],
- ['fineB', [.625,.41,.68,11.4,9.0,.265,.43,2.22]],
- ['fineC', [.61,.425,.66,11.5,9.0,.27,.42,2.18]],
+ ['fineB_holdout', [.625,.41,.68,11.4,9.0,.265,.43,2.22]],
 ];
 const N = Number(process.argv[2] || 3000);
 for (const [name, values] of variants) {
@@ -24,7 +21,7 @@ for (const [name, values] of variants) {
   const ults: Record<string, number> = Object.fromEntries(ids.map(id=>[id,0]));
   let forced = 0, kkuro = 0;
   const started = Date.now();
-  for (let g=0;g<N;g++) {
+  for (let g=3000;g<3000+N;g++) {
     const r = new Race(ids,Math.imul(g,2654435761)>>>0).runToEnd();
     wins[r.ranking()[0].def.id]++;
     if (r.forcedEnd) forced++;
