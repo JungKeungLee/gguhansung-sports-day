@@ -12,7 +12,7 @@ const kim = CHAR_BY_ID.kimokdok.skills[0].actions[0] as { value: number };
 const yappu = CHAR_BY_ID.yappu.skills[0].actions[0] as { value: number };
 const yamuji = CHAR_BY_ID.yamuji.skills[1].actions[1] as { dur: number };
 const variants: Array<[string, [number, number, number, number, number, number, number, number]]> = [
- ['fineB_holdout', [.625,.41,.68,11.4,9.0,.265,.43,2.22]],
+ ['fineB_yappu42', [.625,.41,.68,11.4,9.0,.265,.42,2.22]],
 ];
 const N = Number(process.argv[2] || 3000);
 for (const [name, values] of variants) {
