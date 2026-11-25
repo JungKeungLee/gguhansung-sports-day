@@ -1,0 +1,15 @@
+name: Balance candidate checks
+on:
+  push:
+    branches: [balance-10pct-test]
+jobs:
+  trial:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npx vite-node scripts/balance-candidates.ts 3000
