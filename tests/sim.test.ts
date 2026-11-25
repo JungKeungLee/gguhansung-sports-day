@@ -271,6 +271,21 @@ describe('결승선 이동', () => {
   });
 });
 
+describe('반전 세계 전용 속도 보정', () => {
+  it('정상 경기에서는 보정값과 무관하게 동일 시드·동일 결과', () => {
+    const ids = ALL;
+    const a = new Race(ids, 1987, CONFIG).runToEnd();
+    const modified = { ...CONFIG, reverseWorld: {
+      ...CONFIG.reverseWorld,
+      speedFactor: { ...CONFIG.reverseWorld.speedFactor, yappu: 1.2, yamuji: 0.8 },
+    } };
+    const b = new Race(ids, 1987, modified).runToEnd();
+    expect(b.reversed).toBe(a.reversed);
+    expect(b.ranking().map((r) => r.def.id)).toEqual(a.ranking().map((r) => r.def.id));
+    expect(b.runners.map((r) => r.finishTime)).toEqual(a.runners.map((r) => r.finishTime));
+  });
+});
+
 describe('🌍 반전 세계: 출발점으로 역주행', () => {
   const reverseCfg = { ...CONFIG, finishMove: { ...CONFIG.finishMove, outcomes: [{ to: -1, w: 1 }] } };
 
