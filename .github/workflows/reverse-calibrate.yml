@@ -1,0 +1,17 @@
+name: Reverse win-rate calibration
+on:
+  push:
+    branches: ['feature/reverse-balanced-winrate']
+jobs:
+  evaluate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - run: npm run build
+      - run: npx vite-node scripts/reverse-calibrate.ts 3500 2000
