@@ -9,9 +9,9 @@ const ids=CHARACTERS.map(c=>c.id),N=Number(process.argv[2]??3500),OFFSET=Number(
 type Factors=Record<CharId,number>;
 const base=CONFIG.reverseWorld.speedFactor;
 const candidates: Array<[string,Partial<Factors>]>=[
-['mild',{yappu:0.980,harunotsuki:0.990,manjo:1,moya:1.005,yuntami:0.995,yamuji:1.075,nanwony:1.010,kkutinho:1.050,kimokdok:0.985,damyu:0.975}],
-['medium',{yappu:0.960,harunotsuki:0.982,manjo:1,moya:1.010,yuntami:0.992,yamuji:1.120,nanwony:1.020,kkutinho:1.075,kimokdok:0.973,damyu:0.953}],
-['strong',{yappu:0.935,harunotsuki:0.975,manjo:1,moya:1.015,yuntami:0.988,yamuji:1.150,nanwony:1.028,kkutinho:1.100,kimokdok:0.960,damyu:0.930}],
+['base',{}],
+['tinyA',{yappu:0.992,harunotsuki:0.999,manjo:1.005,moya:1.005,yuntami:1,yamuji:1.027,nanwony:1.007,kkutinho:1.019,kimokdok:0.993,damyu:0.990}],
+['tinyB',{yappu:0.988,harunotsuki:0.995,manjo:1.006,moya:1.005,yuntami:0.997,yamuji:1.030,nanwony:1.005,kkutinho:1.021,kimokdok:0.991,damyu:0.987}],
 ];
 for(const [name,factors] of candidates){
  const speedFactor={...base,...factors};
