@@ -31,6 +31,7 @@ export function commentFor(e: RaceEvent, defs: CharDef[]): Omit<Comment, 'id'> |
       ? { t: e.t, text: `🧠 선두 ${a}, 교환 대신 전력 질주!`, tone: 'normal' }
       : { t: e.t, text: `🔄 ${a} ↔ ${b} 위치가 뒤바뀌었습니다!!`, tone: 'ult' };
     case 'trapSet': return null;
+    case 'reverseWorld': return { t: e.t, text: '🌍 반전 세계! 출발점이 결승선으로 바뀌었습니다! 모두 뒤돌아 달립니다!!', tone: 'event' };
     case 'finishMove': return {
       t: e.t, tone: 'event',
       text: e.to! < e.from!

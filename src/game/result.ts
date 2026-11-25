@@ -25,7 +25,7 @@ export const formatTime = (ms: number) => (ms / 1000).toFixed(3);
 
 const MEDALS: Record<number, string> = { 1: '🥇', 2: '🥈', 3: '🥉' };
 
-export function formatCopyText(rows: ResultRow[], finishLine: number): string {
+export function formatCopyText(rows: ResultRow[], finishLine: number, reversed = false): string {
   const line = '━━━━━━━━━━━━━━━━';
   const tieCount = (rank: number) => rows.filter((r) => r.rank === rank).length;
   const body = rows.map((r) => {
@@ -43,7 +43,7 @@ export function formatCopyText(rows: ResultRow[], finishLine: number): string {
     '',
     line,
     `🏆 우승: ${winners}`,
-    `📏 최종 결승선: ${Math.round(finishLine)}m`,
+    `📏 최종 결승선: ${Math.round(finishLine)}m${reversed ? ' (🌍 반전 세계 · 출발점 복귀)' : ''}`,
     `👥 참가 인원: ${rows.length}명`,
   ].join('\n');
 }

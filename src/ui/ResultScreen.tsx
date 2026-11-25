@@ -46,7 +46,7 @@ export function ResultScreen({ race, onReplay, onMenu, onHome }: { race: Race; o
   const winners = rows.filter((r) => r.rank === 1);
 
   const onCopy = async () => {
-    const ok = await copyText(formatCopyText(rows, race.finishLine));
+    const ok = await copyText(formatCopyText(rows, race.reversed ? 0 : race.finishLine, race.reversed));
     setMsg(ok
       ? { ok: true, text: '✅ 순위를 복사했어요! 카카오톡·디스코드에 붙여넣기 하세요.' }
       : { ok: false, text: '❌ 복사에 실패했어요. 브라우저 클립보드 권한을 확인해주세요.' });
@@ -62,7 +62,7 @@ export function ResultScreen({ race, onReplay, onMenu, onHome }: { race: Race; o
           <div className="rc-body">
             <div className="rc-label">🏆 우승</div>
             <div className="rc-winner">{winners.map((w) => w.name).join(', ')}</div>
-            <div className="rc-line">📏 결승선 <b>{race.finishLine}m</b>{race.finishMoved && <span className={`moved-tag${race.finishLine < race.cfg.baseFinish ? ' shorten' : ''}`}>{race.finishLine < race.cfg.baseFinish ? '단축!' : '연장!'}</span>}</div>
+            <div className="rc-line">📏 결승선 <b>{race.reversed ? 0 : race.finishLine}m</b>{race.reversed ? <span className="moved-tag">🌍 반전 세계</span> : race.finishMoved && <span className={`moved-tag${race.finishLine < race.cfg.baseFinish ? ' shorten' : ''}`}>{race.finishLine < race.cfg.baseFinish ? '단축!' : '연장!'}</span>}</div>
             <div className="rc-line">👥 참가 <b>{rows.length}명</b></div>
           </div>
           <div className="rc-foot">꾸한성 대환장 운동회</div>

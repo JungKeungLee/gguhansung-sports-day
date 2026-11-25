@@ -102,6 +102,7 @@ img.avatar { border: none; border-radius: 0; object-fit: contain; background: tr
 }
 .mm-tick { position: absolute; top: 12px; transform: translateX(-50%); font-size: 11px; color: #aab; }
 .mm-finish { position: absolute; right: -30px; top: -14px; font-size: 24px; }
+.mm-finish.reverse { right: auto; left: -30px; }
 .mm-dot {
   position: absolute; top: -12px; width: 30px; height: 30px; margin-left: -15px; border-radius: 50%;
   border: 2px solid #fff; font-size: 14px; font-weight: 900; display: flex; align-items: center; justify-content: center;
@@ -146,6 +147,11 @@ img.avatar { border: none; border-radius: 0; object-fit: contain; background: tr
   82% { transform: skewY(-3deg) translateX(2%); opacity: 1; }
   100% { transform: skewY(-3deg) translateX(110%); opacity: 0; }
 }
+
+/* 반전 세계: 필살기/꾸로와 컷인 대기열 공유. 새 이미지 없이 보라색 반전 경고. */
+.cutin.reverse-world .cutin-band { --c: #4d2e9b; padding-left: 150px; }
+.cutin.reverse-world .cutin-name { font-size: 46px; color: #fff1a5; }
+.cutin.reverse-world .cutin-line { font-size: 23px; }
 
 /* 꾸로의 괴롭힘 컷인 (필살기 컷인과 같은 자리·같은 대기열, 보라 띠) */
 .cutin.kkuro .cutin-band { --c: #5b2a86; padding-left: 40px; gap: 18px; }
