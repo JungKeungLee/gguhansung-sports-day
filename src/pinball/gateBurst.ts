@@ -287,7 +287,7 @@ export class GateBurst {
   /** 진행 중 이벤트 1스텝 */
   private run(now: number): void {
     const e = this.ev!;
-    if (now >= e.end) { this.finishEv(now); return; }
+    if (now >= e.end) { this.finishEv(); return; }
     if (++this.steps >= SCAN_STEPS) { this.steps = 0; this.refreshNear(); }
     const { rng, gateY } = this.h;
     if (e.kind === 'hole') {
@@ -343,7 +343,7 @@ export class GateBurst {
     return false;
   }
 
-  private finishEv(now: number): void {
+  private finishEv(): void {
     const e = this.ev!;
     if (e.kind === 'hole') {
       this.h.scene.tweens.add({ targets: this.hole, scale: 0.1, duration: 250, onComplete: () => this.hole.setVisible(false) });
