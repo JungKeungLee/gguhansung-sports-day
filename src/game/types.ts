@@ -100,7 +100,7 @@ export interface Effect {
 export type RaceEventType =
   | 'start' | 'skill' | 'ult' | 'obstacleHit' | 'obstacleDodge' | 'obstacleImmune' | 'obstacleProtected'
   | 'debuff' | 'blocked' | 'teleport' | 'dash' | 'push' | 'swap' | 'trapSet' | 'trapHit'
-  | 'finishMove' | 'cheer' | 'kkuroHit' | 'kkuro' | 'leadChange' | 'finish' | 'end';
+  | 'finishMove' | 'reverseWorld' | 'cheer' | 'kkuroHit' | 'kkuro' | 'leadChange' | 'finish' | 'end';
 
 export interface RaceEvent {
   t: number;

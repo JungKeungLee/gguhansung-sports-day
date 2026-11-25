@@ -22,6 +22,8 @@ export class Race {
   stepCount = 0;
   finishLine: number;
   finishMoved = false;
+  /** 반전 세계: 진행도는 기존 결승 기준으로 계속 증가하지만 실제 화면 이동 방향은 왼쪽(-) */
+  reversed = false;
   /** 이번 경기 결승선 이벤트 결과·발동 지점 (화면 비공개). 단축이 안전 조건으로 취소되면 cancelled */
   finishPlan: { to: number; at: number; cancelled: boolean } = { to: 0, at: 0, cancelled: false };
   finishedCount = 0;
@@ -62,7 +64,7 @@ export class Race {
     this.obstaclesByLane = generateObstacles(this.rng, ids.length, cfg);
     const fm = cfg.finishMove;
     const to = this.rng.weighted(fm.outcomes.filter((o) => o.to <= cfg.maxFinish), (o) => o.w).to;
-    const win = to < cfg.baseFinish ? fm.shortenWindow : fm.extendWindow;
+    const win = to === -1 ? cfg.reverseWorld.window : to < cfg.baseFinish ? fm.shortenWindow : fm.extendWindow;
     this.finishPlan = { to, at: this.rng.range(win[0], win[1]), cancelled: false };
     this.kkuroPlan = { at: this.rng.range(cfg.kkuro.window[0], cfg.kkuro.window[1]), done: false };
     this.emit({ type: 'start' });
@@ -70,6 +72,32 @@ export class Race {
 
   emit(e: Omit<RaceEvent, 't'>): void {
     this.events.push({ t: this.t, ...e });
+  }
+
+  /** 시뮬레이션의 방향별 진행 거리 → 경기장 실제 좌표(m). 0m가 물리적 원래 출발점. */
+  physicalPos(pos: number): number { return this.reversed ? this.cfg.baseFinish - pos : pos; }
+
+  /** 반전 세계: 현재 위치에서 방향을 바꾸고 0m로 복귀. 이동 규칙은 기존 +진행도로 재사용. */
+  reverseWorld(): void {
+    if (this.reversed || this.finishedCount > 0) return;
+    const base = this.cfg.baseFinish;
+    this.reversed = true;
+    this.finishMoved = true;
+    this.finishLine = base; // 역주행 진행도의 결승은 100. 실제 결승 게이트는 0m.
+    for (const r of this.runners) {
+      r.pos = r.prevPos = base - r.pos;
+      // 진행 방향은 바뀌지만 이미 사용한 필살기·속도효과·쿨타임·레인 유지
+    }
+    for (const lane of this.obstaclesByLane) {
+      for (const ob of lane) {
+        ob.pos = base - ob.pos - ob.len;
+        if (ob.state !== 'destroyed') ob.state = 'idle'; // 돌아오는 길에 장애물 재사용
+      }
+    }
+    // 기존 진행 방향을 기준으로 설치한 함정은 제거. 역주행에서는 새 함정만 적용.
+    this.traps = [];
+    this.emit({ type: 'reverseWorld', from: base, to: 0 });
+    this.updateRanks(); // 즉시 출발점에 가까운 순서로 선두 전환
   }
 
   /** 1 고정 스텝 진행 */
