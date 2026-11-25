@@ -220,6 +220,7 @@ export class PinballScene extends Phaser.Scene {
       wake: (b) => wake(b.go.body),
       shielded: (b, now) => this.skillSys.shielded(b as unknown as BallState, now),
       teleport: (b, ax, ay, bx, by, color) => this.teleport(b as unknown as BallState, { ax, ay, bx, by, color }, false),
+      hasCompletedGateBlast: () => this.gate?.hasCompletedBlast ?? false,
     }, MAP_EVENTS[this.mapId], forced);
     if (q) (window as unknown as { __pbEvents?: unknown; __pbScene?: unknown }).__pbEvents = this.hazards;
     if (q) (window as unknown as { __pbScene?: unknown }).__pbScene = this;

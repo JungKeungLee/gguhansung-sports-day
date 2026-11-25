@@ -1,5 +1,5 @@
 // 결승 입구 역전 이벤트: 마지막(결승) 입구 위 깔때기에 공이 몰리거나 정체되면 충전 → 3종 중 1개 무작위 발동
-//   💥 폭발 3회 우선 → 🌪️ 바람 → 🌀 블랙홀(대상 없으면 바람) → 이후 가중치 추첨.
+//   💥 실제 폭발 완료 → 🌪️ 바람 또는 🌀 블랙홀 → 💥 다음 폭발 순으로 교대.
 // - 결승 입구는 항상 개방: 폭발·바람 뒤 에너지 막(물리 장벽) 없음. 공의 속도·위치만 변경하고 결과 계산은 유지.
 // - 판정은 일정 주기(SCAN_STEPS 스텝)마다 입구 주변만 집계. 이벤트 중에도 주변 공 목록을 주기적으로 갱신해 그 공들만 처리
 // - 입구(세로 통로)를 이미 지난 공·완주 공은 대상 아님
@@ -92,6 +92,7 @@ export class GateBurst {
   private near: GbBall[] = []; // 이벤트 대상 후보 (주기적 갱신)
   private warped = new WeakSet<GbBall>(); // 블랙홀 이동은 공마다 경기당 1회
   private stopped = false;
+  private blastComplete = false; // 실제 폭발 후 2차 발사 및 속도 안정화까지 완료한 상태
   private guardUntil = 0;      // 속도 안전장치 종료 시각
   private band: GbBall[] | null = null; // 블랙홀 이동 구역(맵 중간)의 공 목록 (스텝마다 1회만 생성)
   private readonly spots: { x: number; y: number }[] = []; // 블랙홀 이동 후보 자리: 구조물·포털과 안 겹치는 격자점 (맵 중간 높이, 30px 간격, 생성 시 1회 계산)
@@ -159,6 +160,8 @@ export class GateBurst {
 
   /** 이벤트 연출 중에는 입구 흔들기만 생략 (물리 입구는 항상 열려 있음) */
   get suppressUnjam(): boolean { return this.phase === 'active'; }
+  /** 랜덤 맵의 바람·블랙홀이 결승 폭발보다 먼저 실행되지 않도록 공유하는 상태 */
+  get hasCompletedBlast(): boolean { return this.blastComplete; }
   /** 현재 상태 (QA·확인용) */
   get state(): GatePhase { return this.phase; }
 
@@ -194,7 +197,10 @@ export class GateBurst {
         else if (this.kickAt < 0) this.phase = 'ending'; // 폭발: 2단계 발사까지 끝나면 종료 처리로
         return;
       case 'ending': // 발사·속도 안전장치 종료 후 쿨타임; 입구 장벽 없음
-        if (this.kickAt < 0 && now >= this.guardUntil) this.startCooldown(now, COOLDOWN_MS + COOLDOWN_STEP_MS * (this.stats.events.length - 1));
+        if (this.kickAt < 0 && now >= this.guardUntil) {
+          if (this.stats.events[this.stats.events.length - 1]?.kind === 'blast') this.blastComplete = true;
+          this.startCooldown(now, COOLDOWN_MS + COOLDOWN_STEP_MS * (this.stats.events.length - 1));
+        }
         return;
       case 'cooldown': if (now >= this.readyAt) this.phase = 'idle'; break;
     }
@@ -221,7 +227,7 @@ export class GateBurst {
   }
 
   private pick(): GateEventKind {
-    // 폭발 3회 후 바람·블랙홀이 이어지도록 배치, 이후 무작위 (QA 강제 종류 우선).
+    // 실제 폭발→(바람 또는 블랙홀)→실제 폭발 순으로 교대. 종료·쿨타임 후 다음 이벤트.
     return chooseGateEvent(this.stats.events.length, () => this.h.rng.next(), this.h.force);
   }
 

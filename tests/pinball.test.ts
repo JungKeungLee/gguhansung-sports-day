@@ -96,17 +96,27 @@ describe('쉼표 구분 입력', () => {
 });
 
 describe('핀볼 결승 이벤트·튕김 감소', () => {
-  it('폭발 3회 이후 바람·블랙홀 순서, 이후 가중치 추첨; QA 강제 설정 우선', () => {
+  it('실제 폭발 다음에만 바람 또는 블랙홀이 나오고, 다시 폭발한다', () => {
     let rolls = 0;
-    const random = () => { rolls++; return 0.99; };
-    for (const index of [0, 1, 2]) expect(chooseGateEvent(index, random)).toBe('blast');
-    expect(chooseGateEvent(3, random)).toBe('wind');
-    expect(chooseGateEvent(4, random)).toBe('hole');
-    expect(rolls).toBe(0); // 첫 5회는 종류 선택에 난수 사용 안 함
-    expect(chooseGateEvent(5, () => 0.1)).toBe('blast');
-    expect(chooseGateEvent(5, () => 0.3)).toBe('hole');
-    expect(chooseGateEvent(5, random)).toBe('wind');
-    expect(chooseGateEvent(0, random, 'wind')).toBe('wind'); // 개발 QA 강제 선택
+    const random = () => { rolls++; return 0.9; };
+    expect(chooseGateEvent(0, random)).toBe('blast');
+    expect(rolls).toBe(0); // 첫 폭발을 고르는 데 난수 소모 없음
+    expect(chooseGateEvent(1, () => 0.1)).toBe('hole');
+    expect(chooseGateEvent(1, random)).toBe('wind');
+    expect(chooseGateEvent(2, random)).toBe('blast');
+    expect(chooseGateEvent(3, () => 0.3)).toBe('hole');
+    expect(chooseGateEvent(4, random)).toBe('blast');
+    expect(chooseGateEvent(0, random, 'wind')).toBe('wind'); // 개발 QA
+  });
+
+  it('다른 맵의 돌풍·블랙홀도 결승 폭발 완료 전에는 발동 불가', async () => {
+    const { canSpawnHazard } = await import('../src/pinball/gateRules');
+    expect(canSpawnHazard('gust', false)).toBe(false);
+    expect(canSpawnHazard('blackhole', false)).toBe(false);
+    expect(canSpawnHazard('bomb', false)).toBe(true);
+    expect(canSpawnHazard('warp', false)).toBe(true);
+    expect(canSpawnHazard('gust', true)).toBe(true);
+    expect(canSpawnHazard('blackhole', true)).toBe(true);
   });
 
   it('기본 맵은 유지하고 나머지 맵의 공·핀·판·회전체 반발이 낮아짐', () => {

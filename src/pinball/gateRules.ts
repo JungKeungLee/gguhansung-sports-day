@@ -1,17 +1,15 @@
-// 결승 역전 이벤트: 먼저 폭발 3회 → 바람 → 블랙홀(대상 부족 시 바람) → 가중치 추첨
+// 결승 이벤트: 반드시 실제 폭발이 발생한 후에만 바람 또는 블랙홀이 나온다.
 export type GateEventKind = 'blast' | 'hole' | 'wind';
-export const GATE_EVENT_WEIGHTS: Record<GateEventKind, number> = { blast: 0.2, hole: 0.4, wind: 0.4 };
-const KINDS: GateEventKind[] = ['blast', 'hole', 'wind'];
+// 폭발 뒤 후속 효과는 바람 또는 블랙홀을 같은 확률로 선택한다.
+export const GATE_EVENT_WEIGHTS: Record<GateEventKind, number> = { blast: 0, hole: 0.5, wind: 0.5 };
 
 export function chooseGateEvent(fired: number, random: () => number, force: GateEventKind | null = null): GateEventKind {
-  if (force) return force; // 개발 QA에서는 강제 종류 우선
-  if (fired < 3) return 'blast'; // 첫 3회의 유효 이벤트는 폭발, 바람·블랙홀은 선행하지 않음
-  if (fired === 3) return 'wind';
-  if (fired === 4) return 'hole'; // 이동 가능한 공 부족 시 호출부에서 바람으로 대체
-  let roll = random();
-  for (const kind of KINDS) {
-    roll -= GATE_EVENT_WEIGHTS[kind];
-    if (roll < 0) return kind;
-  }
-  return 'blast'; // 난수 경계 안전장치
+  if (force) return force; // 개발용 QA 강제 이벤트 우선
+  if (fired % 2 === 0) return 'blast'; // 1·3·5번째는 폭발. 이벤트 완료 후에만 다음 발동
+  return random() < GATE_EVENT_WEIGHTS.hole ? 'hole' : 'wind';
+}
+
+/** 별도 맵 이벤트 역시 실제 결승 폭발 완료 전에는 바람·블랙홀을 발생시키지 않는다. */
+export function canSpawnHazard(kind: string, blastComplete: boolean): boolean {
+  return blastComplete || (kind !== 'gust' && kind !== 'blackhole');
 }

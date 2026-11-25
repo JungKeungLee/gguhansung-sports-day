@@ -5,6 +5,7 @@ import Phaser from 'phaser';
 import type { Rng } from '../game/rng';
 import type { MapId } from './maps';
 import type { PreviewShape } from './PinballScene';
+import { canSpawnHazard } from './gateRules';
 
 export type EventKind = 'bomb' | 'blackhole' | 'jump' | 'boost' | 'magnet' | 'hammer' | 'warp' | 'gust';
 export const EVENT_KINDS: EventKind[] = ['bomb', 'blackhole', 'jump', 'boost', 'magnet', 'hammer', 'warp', 'gust'];
@@ -48,6 +49,8 @@ export interface EvHost {
   shielded(b: EvBall, now: number): boolean;
   /** 기존 포털 순간이동 함수 재사용 (출구 근처 다른 공과 겹치면 false → 취소) */
   teleport(b: EvBall, fromX: number, fromY: number, x: number, y: number, color: number): boolean;
+  /** 결승의 실제 폭발 연출과 2차 밀어내기까지 끝났는지 검사한다. */
+  hasCompletedGateBlast(): boolean;
 }
 interface Active {
   kind: EventKind; x: number; y: number; t0: number; end: number;
@@ -248,7 +251,9 @@ export class PinballEvents {
 
   // ───── 내부 ─────
   private spawn(now: number): void {
-    const pool = this.forced ? [this.forced] : [...this.kinds];
+    // 기존 맵 자체 랜덤 이벤트가 결승 폭발보다 먼저 바람·블랙홀을 띄우던 문제 방지.
+    // 개발용 ?pbev 강제 테스트는 기존처럼 우선한다.
+    const pool = this.forced ? [this.forced] : this.kinds.filter((kind) => canSpawnHazard(kind, this.h.hasCompletedGateBlast()));
     for (let i = pool.length - 1; i > 0; i--) { const j = this.h.rng.int(i + 1); [pool[i], pool[j]] = [pool[j], pool[i]]; }
     for (const kind of pool) {
       const spot = this.place(kind);
