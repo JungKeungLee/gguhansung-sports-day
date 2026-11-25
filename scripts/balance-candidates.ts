@@ -9,15 +9,17 @@ const dam = CHAR_BY_ID.damyu.ult.actions[0] as { max: number };
 const haru = CHAR_BY_ID.harunotsuki.ult.actions[0] as { dist: number };
 const kkut = CHAR_BY_ID.kkutinho.ult.actions[0] as { dist: number };
 const kim = CHAR_BY_ID.kimokdok.skills[0].actions[0] as { value: number };
-const variants: Array<[string, [number, number, number, number, number, number]]> = [
- ['baseline', [.55,.4,.6,12,9.3,.3]],
- ['conservative', [.58,.42,.64,11.6,9.1,.29]],
- ['moderate', [.59,.44,.68,11.4,9.0,.28]],
- ['strong', [.61,.45,.70,11.0,8.8,.27]],
+const yappu = CHAR_BY_ID.yappu.skills[0].actions[0] as { value: number };
+const yamuji = CHAR_BY_ID.yamuji.skills[1].actions[1] as { dur: number };
+const variants: Array<[string, [number, number, number, number, number, number, number, number]]> = [
+ ['moderate', [.59,.44,.68,11.4,9.0,.28,.4,2.15]],
+ ['fineA', [.62,.415,.68,11.4,9.0,.27,.42,2.2]],
+ ['fineB', [.625,.41,.68,11.4,9.0,.265,.43,2.22]],
+ ['fineC', [.61,.425,.66,11.5,9.0,.27,.42,2.18]],
 ];
 const N = Number(process.argv[2] || 3000);
 for (const [name, values] of variants) {
-  [moya.value, nan.value, dam.max, haru.dist, kkut.dist, kim.value] = values;
+  [moya.value, nan.value, dam.max, haru.dist, kkut.dist, kim.value, yappu.value, yamuji.dur] = values;
   const wins: Record<string, number> = Object.fromEntries(ids.map(id=>[id,0]));
   const ults: Record<string, number> = Object.fromEntries(ids.map(id=>[id,0]));
   let forced = 0, kkuro = 0;
