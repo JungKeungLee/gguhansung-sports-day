@@ -1,0 +1,19 @@
+name: Reverse browser smoke
+on:
+  push:
+    branches: ['feature/reverse-world-finish']
+jobs:
+  browser:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - run: npx playwright install --with-deps chromium
+      - name: Find seeded reverse
+        run: echo "SEED=$(npx vite-node scripts/find-reverse-seed.ts | tail -1)" >> "$GITHUB_ENV"
+      - run: node tools/reverse-e2e.mjs "$SEED"
