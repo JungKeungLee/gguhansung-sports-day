@@ -27,6 +27,13 @@ export const PINBALL_MAPS: MapInfo[] = [
 ];
 export const mapInfo = (id: MapId) => PINBALL_MAPS.find((m) => m.id === id)!;
 
+/** 결승 날개 피벗 위치 계산 (브라우저/Phaser 없이 시뮬레이션·테스트 가능) */
+export function finishFlipperMount(viewW: number, gap: number, gateY: number, slopeDeg: number): { railX: number; x: number; y: number; len: number; thick: number } {
+  const y = gateY - 245;
+  const railX = viewW / 2 - gap / 2 - (gateY - y) / Math.tan((slopeDeg * Math.PI) / 180);
+  return { railX, x: railX + 14, y, len: 234, thick: 20 };
+}
+
 /** 반발계수: 기본 맵은 유지하고 나머지 맵의 과도한 튕김만 완화 */
 /** staticFriction0: 판·핀 정지마찰 0 (Matter 는 두 물체 중 큰 정지마찰 사용 → 완만한 경사에서 공이 멈추는 것 방지) */
 export function mapPhysics(id: MapId): { ball: number; pin: number; plate: number; rotor: number; staticFriction0: boolean } {

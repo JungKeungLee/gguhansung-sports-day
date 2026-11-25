@@ -6,7 +6,7 @@ import { type BallRecord, type BallSpec, ballLabel, orderSameStep } from './entr
 import { type SkillKind, type SkillState, SKILL_KINDS, PinballSkills, assignSkills } from './skills';
 import { type EventKind, EVENT_KINDS, MAP_EVENTS, PinballEvents } from './events';
 import { GateBurst } from './gateBurst';
-import { MAP_EXT, type MapApi, type MapId, type MapTheme, buildPinballMap, mapInfo, mapPhysics } from './maps';
+import { MAP_EXT, type MapApi, type MapId, type MapTheme, buildPinballMap, mapInfo, mapPhysics, finishFlipperMount } from './maps';
 
 // Phaser 에 포함된 Matter.js (신규 라이브러리 아님)
 const M = (Phaser.Physics.Matter as unknown as { Matter: { Body: typeof MatterJS.Body; Bodies: typeof MatterJS.Bodies; Sleeping: { set(b: MatterJS.BodyType, s: boolean): void } } }).Matter;
@@ -51,11 +51,6 @@ const LABEL_POOL = 40;         // 이름표는 화면에 보이는 공에만, �
 const FIN_FLIPPER_BASE = 0.41;
 const FIN_FLIPPER_SWING = 0.19;
 const FIN_FLIPPER_OMEGA = 1.2;
-function finishFlipperMount(): { railX: number; x: number; y: number; len: number; thick: number } {
-  const y = FIN_GATE_Y - 245;
-  const railX = W / 2 - FIN_GAP / 2 - (FIN_GATE_Y - y) / Math.tan((FIN_DEG * Math.PI) / 180);
-  return { railX, x: railX + 14, y, len: 234, thick: 20 };
-}
 
 // ───── 출발 분산 구역·결승 입구 배치 (게임 씬과 맵 미리보기가 같은 함수 사용 → 배치 일치) ─────
 type LayoutRect = (x: number, y: number, w: number, h: number, deg: number, kind: 'plate' | 'wall') => void;
@@ -82,7 +77,7 @@ function layoutFinishGate(rect: LayoutRect, flipper: (x: number, y: number, rail
   rect(W / 2 - FIN_GAP / 2 - 7, FIN_GATE_Y - 6 + chuteH / 2, 14, chuteH, 0, 'wall');
   rect(W / 2 + FIN_GAP / 2 + 7, FIN_GATE_Y - 6 + chuteH / 2, 14, chuteH, 0, 'wall');
   // 테두리에 연결된 회전축을 중심으로 234px 긴 청록색 날개가 부채꼴로 움직인다.
-  const mount = finishFlipperMount();
+  const mount = finishFlipperMount(W, FIN_GAP, FIN_GATE_Y, FIN_DEG);
   flipper(mount.x, mount.y, mount.railX, mount.len, mount.thick);
 }
 

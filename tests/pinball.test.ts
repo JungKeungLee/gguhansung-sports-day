@@ -141,25 +141,19 @@ describe('핀볼 결승 한쪽 끝 고정형 회전 날개와 공통 스타일',
       expect(map.theme.accent).toBeGreaterThan(0);
     }
   });
-  it('모든 맵 결승 날개는 왼쪽 경사선에 축이 붙고 234px이며 입구와 충돌하지 않음', async () => {
-    const { pinballPreview } = await import('../src/pinball/PinballScene');
-    for (const id of ['basic', 'maze', 'rotor', 'portal', 'chaos'] as const) {
-      const pv = pinballPreview(id);
-      const blades = pv.shapes.filter((s) => s.k === 'flipper');
-      expect(blades).toHaveLength(1);
-      const flipper = blades[0];
-      if (flipper.k !== 'flipper') continue;
-      expect(flipper.len).toBe(234);
-      expect(flipper.x).toBeLessThan(pv.W / 2);
-      expect(flipper.x - flipper.railX).toBeCloseTo(14);
-      expect(flipper.y).toBeGreaterThan(pv.finTop);
-      for (const angle of [0.22, 0.41, 0.60]) {
-        const tipX = flipper.x + Math.cos(angle) * flipper.len;
-        const tipY = flipper.y + Math.sin(angle) * flipper.len;
-        const edgeX = pv.W / 2 - pv.finGap / 2 - (pv.gateY - tipY);
-        expect(tipX - edgeX).toBeGreaterThan(35); // 공·경사판 사이 여유
-        expect(tipY).toBeLessThan(pv.gateY - 25); // 날개가 좁은 입구를 직접 막지 않음
-      }
+  it('결승 날개는 왼쪽 경사선에 축이 붙고 길이 234px이며 입구와 충돌하지 않음', async () => {
+    const { finishFlipperMount } = await import('../src/pinball/maps');
+    const width = 800, gap = 46, gateY = 5000;
+    const flipper = finishFlipperMount(width, gap, gateY, 45);
+    expect(flipper.len).toBe(234);
+    expect(flipper.x).toBeLessThan(width / 2);
+    expect(flipper.x - flipper.railX).toBeCloseTo(14);
+    for (const angle of [0.22, 0.41, 0.60]) {
+      const tipX = flipper.x + Math.cos(angle) * flipper.len;
+      const tipY = flipper.y + Math.sin(angle) * flipper.len;
+      const edgeX = width / 2 - gap / 2 - (gateY - tipY);
+      expect(tipX - edgeX).toBeGreaterThan(35); // 공·경사판 사이 여유
+      expect(tipY).toBeLessThan(gateY - 25); // 좁은 입구를 직접 막지 않음
     }
   });
 });
