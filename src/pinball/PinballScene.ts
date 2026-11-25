@@ -494,8 +494,8 @@ export class PinballScene extends Phaser.Scene {
       }
     }
     // 결승 입구 정체 해소: 입구 바로 위에 공이 있는데 0.9초 이상 아무도 못 지나가면 주변 공을 살짝 흔듦
-    // 역전 이벤트 진행·입구 막이 닫힌 동안은 의도된 정지 → 입구 흔들기·대기 구역 전체 깨우기 생략 (불필요한 물리 연산 방지)
-    if (this.gate.closed) this.stalledSince.delete(FIN_GATE_Y);
+    // 이벤트 연출 중 불필요한 흔들기만 생략. 입구에는 물리 장벽이 없어서 언제든 통과 가능.
+    if (this.gate.suppressUnjam) this.stalledSince.delete(FIN_GATE_Y);
     else if (this.unjam(FIN_GATE_Y, () => true, this.lastFinishPass)) {
       for (const b of this.balls) if (!b.removed && b.go.y >= QUEUE_TOP) wake(b.go.body); // 휴면 안전장치: 대기 구역 전체 깨움
       this.lastFinishPass = this.elapsed;

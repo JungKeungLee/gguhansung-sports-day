@@ -96,17 +96,17 @@ describe('쉼표 구분 입력', () => {
 });
 
 describe('핀볼 결승 이벤트·튕김 감소', () => {
-  it('첫 폭발 후 바람·블랙홀 기회를 보장하고, 그 후에는 세 종류를 추첨', () => {
+  it('폭발 3회 이후 바람·블랙홀 순서, 이후 가중치 추첨; QA 강제 설정 우선', () => {
     let rolls = 0;
     const random = () => { rolls++; return 0.99; };
-    expect(chooseGateEvent(0, random)).toBe('blast');
-    expect(chooseGateEvent(1, random)).toBe('wind');
-    expect(chooseGateEvent(2, random)).toBe('hole');
-    expect(rolls).toBe(0); // 첫 3회는 이벤트 유형 결정에 난수 미사용
-    expect(chooseGateEvent(3, () => 0.1)).toBe('blast');
-    expect(chooseGateEvent(3, () => 0.3)).toBe('hole');
+    for (const index of [0, 1, 2]) expect(chooseGateEvent(index, random)).toBe('blast');
     expect(chooseGateEvent(3, random)).toBe('wind');
-    expect(chooseGateEvent(0, random, 'wind')).toBe('wind'); // QA 강제 선택
+    expect(chooseGateEvent(4, random)).toBe('hole');
+    expect(rolls).toBe(0); // 첫 5회는 종류 선택에 난수 사용 안 함
+    expect(chooseGateEvent(5, () => 0.1)).toBe('blast');
+    expect(chooseGateEvent(5, () => 0.3)).toBe('hole');
+    expect(chooseGateEvent(5, random)).toBe('wind');
+    expect(chooseGateEvent(0, random, 'wind')).toBe('wind'); // 개발 QA 강제 선택
   });
 
   it('기본 맵은 유지하고 나머지 맵의 공·핀·판·회전체 반발이 낮아짐', () => {

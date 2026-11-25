@@ -1,6 +1,6 @@
 // 결승 입구 역전 이벤트: 마지막(결승) 입구 위 깔때기에 공이 몰리거나 정체되면 충전 → 3종 중 1개 무작위 발동
-//   첫 유효 발동은 💥 폭발 확정. 이후 폭발(40%) · 블랙홀(30%) · 상승 바람(30%) 추첨.
-// - 결승 입구에서만 동작. 점수·결과 계산은 건드리지 않음 (공의 속도·위치만 바꿈, 블랙홀 이동은 씬의 기존 순간이동 함수 사용 → ID·기록 유지)
+//   💥 폭발 3회 우선 → 🌪️ 바람 → 🌀 블랙홀(대상 없으면 바람) → 이후 가중치 추첨.
+// - 결승 입구는 항상 개방: 폭발·바람 뒤 에너지 막(물리 장벽) 없음. 공의 속도·위치만 변경하고 결과 계산은 유지.
 // - 판정은 일정 주기(SCAN_STEPS 스텝)마다 입구 주변만 집계. 이벤트 중에도 주변 공 목록을 주기적으로 갱신해 그 공들만 처리
 // - 입구(세로 통로)를 이미 지난 공·완주 공은 대상 아님
 // - 표시 객체는 생성 시 1회만 만들고 매 프레임 위치·크기·투명도만 변경 (프레임마다 도형·글자를 다시 그리지 않음)
@@ -27,10 +27,6 @@ const CHARGE_MS = 1200;        // 충전(경고) 표시 → 그 뒤 발동
 const COOLDOWN_MS = 6500;      // 장시간 아무 이벤트도 나오지 않는 구간 단축      // 이벤트 종료 후 최소 대기
 const COOLDOWN_STEP_MS = 300;  // 후속 이벤트가 갈수록 심하게 늦어지는 현상 방지 // 발동할 때마다 대기 증가
 const MAX_EVENTS = 12;        // 3회 종료 문제 해결; 무한 반복 방지용 상한 유지
-// ───── 입구 에너지 막 (이벤트 중 입구를 닫아, 흩어진 공이 다시 섞인 뒤 통과) ─────
-const LID_W_PAD = 30, LID_H = 10, LID_UP = 8; // 폭 = 입구 폭+30 (양쪽 깔때기 판에 걸침), 두께 10, 입구 위 8px
-const LID_RETRY_MS = 400;      // 막 자리에 공이 걸쳐 있으면 재시도, 그래도 막혀 있으면 이번 회차 생략 (겹침·끼임 방지)
-const LID_AFTER_MS = 600;      // 블랙홀·상승 바람 종료 후 추가로 닫아 두는 시간
 // ───── 💥 초강력 폭발 (기존 입구 충격파를 통합·강화) ─────
 const BLAST_R: [number, number] = [260, 400];  // 범위(px): 이전 170~300
 const BLAST_P: [number, number] = [12, 16];    // 중심 최대 속도(px/스텝): 이전 7.5~12 (16 → 최대 약 460px 상승)
@@ -38,7 +34,6 @@ const BLAST_CAP = 16;                          // 개별 공 속도 상한: 이�
 const BLAST_JITTER = 0.55;                     // 방향 흔들림(rad) → 위·양옆 여러 방향
 const FRONT_R = 140;                           // 입구 앞 이 거리 안 = 곧 통과할 공 → 2단계 수직 발사 (더미 위로 올라가 뒤로 밀림)
 const KICK_DELAY_MS = 130;
-const BLAST_LID_MS = 2200, BLAST_LID_DELAY = 200; // 앞줄 공이 떠 있는 동안 입구를 닫아 뒤 공이 먼저 통과하지 않게 (재정렬 후 열림)
 // ───── 🌀 블랙홀 ─────
 const HOLE_MS = 2200;                          // 흡입 시간
 const HOLE_UP = 36;                            // 중심: 입구 위 36px
@@ -80,7 +75,7 @@ export interface GbHost {
   force?: GateEventKind | null;
 }
 interface Sample { n: number; avgV: number; done: number }
-/** 역전 이벤트 상태: 대기 → 충전·경고 → 실행 → 종료 처리(입구 막·2단계 발사·속도 안전장치 정리) → 쿨타임 → 대기. 대기 외 상태의 발동 요청은 무시(예약 없음) */
+/** 역전 이벤트 상태: 대기 → 충전·경고 → 실행 → 종료 처리(2단계 발사·속도 안전장치) → 쿨타임. 물리 장벽 없음. */
 export type GatePhase = 'idle' | 'charge' | 'active' | 'ending' | 'cooldown';
 interface Active { kind: GateEventKind; t0: number; end: number; k: number; range: number; captured: number; limit: number; vmax: number }
 
@@ -97,11 +92,6 @@ export class GateBurst {
   private near: GbBall[] = []; // 이벤트 대상 후보 (주기적 갱신)
   private warped = new WeakSet<GbBall>(); // 블랙홀 이동은 공마다 경기당 1회
   private stopped = false;
-  private lid: MatterJS.BodyType | null = null;
-  private lidAt = -1;
-  private lidUntil = 0;
-  private lidHold = 0;         // 막 설치 후 유지 시간
-  private lidGiveUp = 0;       // 이 시각까지 막 자리가 비지 않으면 이번 회차 생략
   private guardUntil = 0;      // 속도 안전장치 종료 시각
   private band: GbBall[] | null = null; // 블랙홀 이동 구역(맵 중간)의 공 목록 (스텝마다 1회만 생성)
   private readonly spots: { x: number; y: number }[] = []; // 블랙홀 이동 후보 자리: 구조물·포털과 안 겹치는 격자점 (맵 중간 높이, 30px 간격, 생성 시 1회 계산)
@@ -113,7 +103,6 @@ export class GateBurst {
   private warn: Phaser.GameObjects.Arc;
   private core: Phaser.GameObjects.Arc;
   private rays: Phaser.GameObjects.Graphics;
-  private lidView: Phaser.GameObjects.Rectangle;
   private flash: Phaser.GameObjects.Arc;
   private rings: Phaser.GameObjects.Arc[] = [];
   private screen: Phaser.GameObjects.Rectangle;
@@ -127,7 +116,7 @@ export class GateBurst {
   /** QA·확인용 통계 */
   readonly stats = {
     events: [] as { kind: GateEventKind; why: string; t: number; n: number; k: number; hit: number }[],
-    snaps: [] as { base: number; front: GbBall[] }[], peakN: 0, peakJamN: 0, peakNoPassMs: 0, cancelled: 0, lids: 0, lidSkipped: 0, captured: 0, captureFail: 0, scans: 0,
+    snaps: [] as { base: number; front: GbBall[] }[], peakN: 0, peakJamN: 0, peakNoPassMs: 0, cancelled: 0, captured: 0, captureFail: 0, scans: 0,
   };
 
   constructor(private h: GbHost) {
@@ -137,7 +126,6 @@ export class GateBurst {
     this.core = sc.add.circle(cx, gy - 10, 26, 0xfff1b8).setDepth(8).setVisible(false);
     this.rays = sc.add.graphics({ x: cx, y: gy - 10 }).setDepth(8).setVisible(false);
     for (let i = 0; i < 8; i++) { const t = (i * Math.PI) / 4; this.rays.lineStyle(3, 0xffd166, 0.9).lineBetween(Math.cos(t) * 265, Math.sin(t) * 265, Math.cos(t) * 239, Math.sin(t) * 239); }
-    this.lidView = sc.add.rectangle(cx, gy - LID_UP, h.gap + LID_W_PAD, LID_H, 0x7ff3ff).setStrokeStyle(2, 0xffffff, 0.9).setDepth(8).setVisible(false);
     // 폭발
     this.flash = sc.add.circle(cx, gy, BLAST_R[1] * 0.45, 0xfff1b8, 0.9).setDepth(8).setVisible(false);
     for (const [c, w] of [[0xffffff, 10], [0xff5a36, 8], [0xffd166, 6]]) this.rings.push(sc.add.circle(cx, gy, BLAST_R[1]).setStrokeStyle(w, c).setDepth(8).setVisible(false));
@@ -169,8 +157,8 @@ export class GateBurst {
     this.banners = { charge: banner('⚡ 결승 입구 에너지 폭주!', '#ffd166'), blast: banner('💥 초강력 폭발!', '#ff5a36'), hole: banner('🌀 블랙홀 출현!', '#c9a7ff'), wind: banner('🌪️ 상승 바람!', '#bfe9ff') };
   }
 
-  /** 입구 에너지 막이 닫혀 있거나 이벤트 진행 중 (씬의 입구 정체 흔들기 생략용) */
-  get closed(): boolean { return this.lid !== null || this.phase === 'active'; }
+  /** 이벤트 연출 중에는 입구 흔들기만 생략 (물리 입구는 항상 열려 있음) */
+  get suppressUnjam(): boolean { return this.phase === 'active'; }
   /** 현재 상태 (QA·확인용) */
   get state(): GatePhase { return this.phase; }
 
@@ -197,7 +185,6 @@ export class GateBurst {
   /** 고정 스텝마다 1회 (씬의 공 반복이 끝난 뒤) */
   step(now: number): void {
     if (this.stopped) return;
-    this.lidStep(now);
     if (this.kickAt >= 0 && now >= this.kickAt) this.kickFront();
     if (now < this.guardUntil) this.guard();
     switch (this.phase) {
@@ -206,8 +193,8 @@ export class GateBurst {
         if (this.ev) this.run(now);
         else if (this.kickAt < 0) this.phase = 'ending'; // 폭발: 2단계 발사까지 끝나면 종료 처리로
         return;
-      case 'ending': // 입구 막·발사·속도 안전장치가 모두 끝난 뒤에만 쿨타임 시작
-        if (!this.lid && this.lidAt < 0 && this.kickAt < 0 && now >= this.guardUntil) this.startCooldown(now, COOLDOWN_MS + COOLDOWN_STEP_MS * (this.stats.events.length - 1));
+      case 'ending': // 발사·속도 안전장치 종료 후 쿨타임; 입구 장벽 없음
+        if (this.kickAt < 0 && now >= this.guardUntil) this.startCooldown(now, COOLDOWN_MS + COOLDOWN_STEP_MS * (this.stats.events.length - 1));
         return;
       case 'cooldown': if (now >= this.readyAt) this.phase = 'idle'; break;
     }
@@ -234,7 +221,7 @@ export class GateBurst {
   }
 
   private pick(): GateEventKind {
-    // 첫 폭발 후 바람과 블랙홀도 실제로 나올 기회 보장, 이후 무작위 (QA 강제 종류 우선).
+    // 폭발 3회 후 바람·블랙홀이 이어지도록 배치, 이후 무작위 (QA 강제 종류 우선).
     return chooseGateEvent(this.stats.events.length, () => this.h.rng.next(), this.h.force);
   }
 
@@ -270,8 +257,7 @@ export class GateBurst {
     const dur = kind === 'hole' ? HOLE_MS : lerp(WIND_MS);
     this.ev = { kind, t0: now, end: now + dur, k, range: kind === 'hole' ? lerp(HOLE_R) : WIND_H, captured: 0, limit: Math.round(lerp(HOLE_CAPTURE)), vmax: lerp(WIND_VMAX) };
     this.refreshNear();
-    // 상승 바람: 이벤트 동안 입구 닫음 (자리가 빌 때까지 재시도). 블랙홀: 흡수 반경이 입구를 덮고 중심이 공을 계속 끌어올리므로 막 없이 진행
-    if (kind === 'wind') { this.lidAt = now; this.lidHold = dur + LID_AFTER_MS; this.lidGiveUp = now + dur; }
+    // 바람·블랙홀 모두 공의 이동만 변화시키며 결승 입구는 막지 않는다.
     this.guardUntil = now + dur + GUARD_MS;
     if (kind === 'hole') { this.hole.setVisible(true).setScale(0.2); this.holePull.setVisible(true); this.h.scene.tweens.add({ targets: this.hole, scale: 1, duration: 300 }); }
     else this.wind.setVisible(true).setAlpha(0);
@@ -365,8 +351,6 @@ export class GateBurst {
     } else this.wind.setVisible(false);
     if (e.kind === 'wind') this.stats.events[this.stats.events.length - 1].hit = this.near.length;
     this.ev = null; // near 는 속도 안전장치가 끝날 때까지 유지
-    this.lidAt = -1; // 아직 설치 못 한 입구 막은 취소 (이벤트가 끝난 뒤 늦게 닫히지 않게)
-    if (this.lid) this.lidUntil = Math.min(this.lidUntil, now + LID_AFTER_MS);
     this.phase = 'ending';
   }
 
@@ -377,7 +361,7 @@ export class GateBurst {
     b.go.setVelocity(vx, vy);
   }
 
-  /** 💥 초강력 폭발: 1단계 더미 팽창(먼 공일수록 빠르게) → 2단계 앞줄 공 수직 발사 → 입구 막 */
+  /** 💥 초강력 폭발: 더미 팽창 → 앞줄 공 발사 (입구 물리 장벽 없음) */
   private blast(now: number, range: number, power: number): void {
     const { rng, gateY } = this.h, cy = gateY + 8;
     let hit = 0;
@@ -399,7 +383,6 @@ export class GateBurst {
     this.near = this.h.balls.filter((b) => this.active(b) && this.h.gateY - b.go.y < range + 80); // 속도 안전장치 대상
     this.kickPower = power;
     this.kickAt = now + KICK_DELAY_MS;
-    this.lidAt = now + BLAST_LID_DELAY; this.lidHold = BLAST_LID_MS; this.lidGiveUp = this.lidAt + LID_RETRY_MS;
     this.guardUntil = now + GUARD_MS;
     this.blastFx(range);
   }
@@ -414,24 +397,8 @@ export class GateBurst {
     this.kick = []; this.kickAt = -1;
   }
 
-  /** 입구 에너지 막 설치·해제 (공이 걸쳐 있으면 잠시 재시도, 끝내 막혀 있으면 생략) */
-  private lidStep(now: number): void {
-    const { scene, gateY, gap, R } = this.h;
-    if (this.lid && now >= this.lidUntil) { scene.matter.world.remove(this.lid); this.lid = null; this.lidView.setVisible(false); }
-    if (this.lidAt < 0 || now < this.lidAt) return;
-    const ly = gateY - LID_UP, hw = (gap + LID_W_PAD) / 2;
-    const blocked = this.h.balls.some((b) => !b.removed && b.record.finishTime === null && Math.abs(b.go.y - ly) < LID_H / 2 + R && Math.abs(b.go.x - this.cx) < hw + R);
-    if (blocked) { if (now > this.lidGiveUp) { this.lidAt = -1; this.stats.lidSkipped++; } return; }
-    if (!this.lid) this.lid = scene.matter.add.rectangle(this.cx, ly, hw * 2, LID_H, { isStatic: true, restitution: 0.1, friction: 0.01 }) as unknown as MatterJS.BodyType;
-    this.lidUntil = now + this.lidHold;
-    this.lidAt = -1;
-    this.lidView.setVisible(true);
-    this.stats.lids++;
-  }
-
   /** 매 프레임: 표시 객체의 크기·투명도·회전만 변경 */
   draw(now: number): void {
-    if (this.lid) this.lidView.setAlpha(0.5 + 0.45 * (0.5 + 0.5 * Math.sin((now / 1000) * ((this.lidUntil - now) < 450 ? 40 : 12))));
     const e = this.ev;
     if (e?.kind === 'hole') {
       this.hole.setRotation(-now / 160);
@@ -450,9 +417,8 @@ export class GateBurst {
 
   /** 경기 종료: 표시·물리 정리, 이후 발동 없음 */
   stop(): void {
-    this.stopped = true; this.phase = 'idle'; this.chargeAt = -1; this.lidAt = -1; this.kickAt = -1; this.kick = []; this.ev = null; this.near = [];
-    this.showCharge(false); this.lidView.setVisible(false); this.hole.setVisible(false); this.holePull.setVisible(false); this.wind.setVisible(false);
-    if (this.lid) { this.h.scene.matter.world.remove(this.lid); this.lid = null; }
+    this.stopped = true; this.phase = 'idle'; this.chargeAt = -1; this.kickAt = -1; this.kick = []; this.ev = null; this.near = [];
+    this.showCharge(false); this.hole.setVisible(false); this.holePull.setVisible(false); this.wind.setVisible(false);
   }
 
   /** 블랙홀 이동 위치 표시: 고리 풀을 돌려 씀 (새 객체 생성 없음) */
