@@ -46,12 +46,15 @@ const FLOW_BAND = 320;         // 결승 입구 위 이 높이 안의 공은 휴
 const QUEUE_TOP = 2550 + MAP_EXT + MAP_DY; // 이 아래(맵 하단~결승 깔때기)는 결승 대기 줄이 생기는 구역: 휴면 허용, 개별 끼임 복구는 줄이 멈췄을 때만
 const LABEL_POOL = 40;         // 이름표는 화면에 보이는 공에만, 최대 40개를 돌려 씀 (500개 대응)
 
-// 결승 막대 배치: 왼쪽 45° 경사 테두리의 고정축 지지대에 연결.
-// 회전 반경+막대 두께+공 반지름이 경사판에 닿지 않도록 중심을 안쪽으로 이격한다.
-function finishRotorMount(): { railX: number; x: number; y: number; len: number } {
+// 결승 회전 날개: 왼쪽 V자 테두리에서 한쪽 끝을 고정해 안쪽으로 왕복 회전.
+// 각도 범위 0.22~0.60rad(약 13~34°): 판·공과 겹치지 않고 결승 중앙을 가로막지 않는다.
+const FIN_FLIPPER_BASE = 0.41;
+const FIN_FLIPPER_SWING = 0.19;
+const FIN_FLIPPER_OMEGA = 1.2;
+function finishFlipperMount(): { railX: number; x: number; y: number; len: number; thick: number } {
   const y = FIN_GATE_Y - 245;
   const railX = W / 2 - FIN_GAP / 2 - (FIN_GATE_Y - y) / Math.tan((FIN_DEG * Math.PI) / 180);
-  return { railX, x: railX + 165, y, len: 140 };
+  return { railX, x: railX + 14, y, len: 234, thick: 20 };
 }
 
 // ───── 출발 분산 구역·결승 입구 배치 (게임 씬과 맵 미리보기가 같은 함수 사용 → 배치 일치) ─────
@@ -67,8 +70,8 @@ function layoutStartSpread(rect: LayoutRect, pin: (x: number, y: number) => void
     for (let x = WALL + 46 + (row % 2 ? 32 : 0); x < W - WALL - 30; x += 64) pin(x, y);
   }
 }
-/** 결승: 45° V자 깔때기 + 세로 통로 + 회전 막대 */
-function layoutFinishGate(rect: LayoutRect, rotor: (x: number, y: number, len: number, omega: number, arms: number, thick: number) => void): void {
+/** 결승: 45° V자 깔때기 + 세로 통로 + 왼쪽 경사에 고정된 한쪽 끝 회전 날개 */
+function layoutFinishGate(rect: LayoutRect, flipper: (x: number, y: number, railX: number, len: number, thick: number) => void): void {
   const half = W / 2 - FIN_GAP / 2 - WALL;
   const len = half / Math.cos((FIN_DEG * Math.PI) / 180);
   const cy = (FIN_TOP + FIN_GATE_Y) / 2;
@@ -78,9 +81,9 @@ function layoutFinishGate(rect: LayoutRect, rotor: (x: number, y: number, len: n
   const chuteH = FINISH_Y + 70 - (FIN_GATE_Y - 6);
   rect(W / 2 - FIN_GAP / 2 - 7, FIN_GATE_Y - 6 + chuteH / 2, 14, chuteH, 0, 'wall');
   rect(W / 2 + FIN_GAP / 2 + 7, FIN_GATE_Y - 6 + chuteH / 2, 14, chuteH, 0, 'wall');
-  // 140px 회전 막대(기존 60px): 왼쪽 경사 테두리에 지지대로 연결, 느리게 회전.
-  const mount = finishRotorMount();
-  rotor(mount.x, mount.y, mount.len, 0.85, 1, 14);
+  // 테두리에 연결된 회전축을 중심으로 234px 긴 청록색 날개가 부채꼴로 움직인다.
+  const mount = finishFlipperMount();
+  flipper(mount.x, mount.y, mount.railX, mount.len, mount.thick);
 }
 
 // ───── 맵 미리보기 (물리 없음, 설정 화면 SVG 용) ─────
@@ -89,6 +92,7 @@ export type PreviewShape =
   | { k: 'pin'; x: number; y: number; r: number; color: number }
   | { k: 'bumper'; x: number; y: number; r: number }
   | { k: 'rotor'; x: number; y: number; len: number; arms: number; thick: number }
+  | { k: 'flipper'; x: number; y: number; railX: number; len: number; thick: number; angle: number }
   | { k: 'portal'; ax: number; ay: number; bx: number; by: number; color: number };
 export interface PinballPreview { W: number; H: number; startBottom: number; finTop: number; gateY: number; finishY: number; finGap: number; theme: MapTheme; shapes: PreviewShape[] }
 /** 실제 경기와 같은 배치 함수(layoutStartSpread·layoutFinishGate·buildPinballMap)를 기록용 API로 실행. 랜덤 맵은 seed 에 따라 달라짐 */
@@ -97,11 +101,12 @@ export function pinballPreview(mapId: MapId, seed = 1): PinballPreview {
   const shapes: PreviewShape[] = [];
   const rect = (x: number, y: number, w: number, h: number, deg: number, color: number) => { shapes.push({ k: 'rect', x, y, w, h, deg, color }); };
   const rotor = (x: number, y: number, len: number, _o: number, arms = 1, thick = 16) => { shapes.push({ k: 'rotor', x, y, len, arms, thick }); };
+  const flipper = (x: number, y: number, railX: number, len: number, thick: number) => { shapes.push({ k: 'flipper', x, y, railX, len, thick, angle: FIN_FLIPPER_BASE }); };
   rect(WALL / 2, H / 2, WALL, H, 0, theme.wall);
   rect(W - WALL / 2, H / 2, WALL, H, 0, theme.wall);
   rect(W / 2, H - WALL / 2, W, WALL, 0, theme.wall);
   layoutStartSpread((x, y, w, h, deg, kind) => rect(x, y, w, h, deg, theme[kind]), (x, y) => { shapes.push({ k: 'pin', x, y, r: PIN_R, color: theme.pin }); });
-  layoutFinishGate((x, y, w, h, deg, kind) => rect(x, y, w, h, deg, theme[kind]), rotor);
+  layoutFinishGate((x, y, w, h, deg, kind) => rect(x, y, w, h, deg, theme[kind]), flipper);
   const dy = MAP_DY;
   buildPinballMap(mapId, {
     W, H: H - dy, WALL, FINISH_Y: LOGICAL_FINISH, rng: new Rng((seed ^ 0x9e3779b9) >>> 0),
@@ -156,6 +161,7 @@ export class PinballScene extends Phaser.Scene {
   private theme: MapTheme;
   private mapRng: Rng;
   private rotors: Rotor[] = [];
+  private finishFlipper: { x: number; y: number; len: number; body: MatterJS.BodyType; view: Phaser.GameObjects.Container } | null = null;
   private portals: Portal[] = [];
   private speedCap = 0;
   private portalUses = 0;
@@ -229,20 +235,14 @@ export class PinballScene extends Phaser.Scene {
   // ───────────── 맵 ─────────────
   private drawBackdrop(): void {
     const g = this.add.graphics().setDepth(-5);
-    const t = this.theme;
-    g.fillGradientStyle(t.bgTop, t.bgTop, t.bgBottom, t.bgBottom, 1).fillRect(0, 0, W, H);
-    g.lineStyle(1, t.grid, 0.35);
-    for (let y = 0; y < H; y += 100) g.lineBetween(WALL, y, W - WALL, y);
-    // 출발 대기 공간 표시
-    g.fillStyle(0xd4a017, 0.1).fillRect(WALL, 40, W - WALL * 2, START_BOTTOM - 40);
-    this.add.text(W / 2, 14, 'START', { fontFamily: 'Arial Black, sans-serif', fontSize: '22px', color: '#ffd166' }).setOrigin(0.5, 0);
-    // 결승 판정선 (통로 폭만큼만 체크무늬)
+    // 마블 룰렛 계열의 절제된 무대: 검정 바탕 + 얇은 회색 트랙, 별도 색 띠·격자 없음.
+    g.fillStyle(this.theme.bgTop, 1).fillRect(0, 0, W, H);
+    this.add.text(W / 2, 18, 'START', { fontFamily: 'Arial Black, sans-serif', fontSize: '19px', color: '#d6e0e6' }).setOrigin(0.5, 0);
     const sq = 8;
     for (let x = W / 2 - FIN_GAP / 2; x < W / 2 + FIN_GAP / 2; x += sq) {
       for (let k = 0; k < 2; k++) g.fillStyle((((x - (W / 2 - FIN_GAP / 2)) / sq) + k) % 2 ? 0x111111 : 0xffffff).fillRect(x, FINISH_Y - sq + k * sq, sq, sq);
     }
-    this.add.text(W / 2, FINISH_Y + 70, 'FINISH', { fontFamily: 'Arial Black, sans-serif', fontSize: '26px', color: '#ffd166' }).setOrigin(0.5, 0);
-    g.fillStyle(0xc62828, 0.18).fillRect(WALL, FIN_GATE_Y, W - WALL * 2, H - FIN_GATE_Y);
+    this.add.text(W / 2, FINISH_Y + 70, 'FINISH', { fontFamily: 'Arial Black, sans-serif', fontSize: '24px', color: '#e6edf2' }).setOrigin(0.5, 0);
   }
 
   private staticRect(x: number, y: number, w: number, h: number, angleDeg: number, color: number, restitution = this.phys.plate, noStatic = this.phys.staticFriction0): void {
@@ -256,17 +256,31 @@ export class PinballScene extends Phaser.Scene {
     layoutStartSpread((x, y, w, h, deg, kind) => this.staticRect(x, y, w, h, deg, this.theme[kind]), (x, y) => this.addPin(x, y, PIN_R, this.phys.pin));
   }
 
-  /** 결승 단일 입구: 깔때기·통로 반발 0.05, 왼쪽 테두리 지지대에 회전 막대 부착 */
+  /** 결승: 회전축이 왼쪽 경사판에 실제로 고정된 단일 날개. 입구는 막지 않음. */
   private buildFinishGate(): void {
     layoutFinishGate((x, y, w, h, deg, kind) => this.staticRect(x, y, w, h, deg, this.theme[kind], 0.05, true),
-      (x, y, len, omega, arms, thick) => this.addRotor(x, y, len, omega, arms, thick, 0.1));
-    const m = finishRotorMount();
-    // 지지대는 시각 연출 전용: 물리 벽으로 만들면 공이 끼거나 다시 튕길 수 있어 충돌 없음.
-    const mountG = this.add.graphics().setDepth(1);
-    mountG.lineStyle(10, this.theme.wall, 1).lineBetween(m.railX, m.y, m.x, m.y);
-    mountG.lineStyle(3, this.theme.stroke, 1).lineBetween(m.railX, m.y, m.x, m.y);
-    mountG.fillStyle(this.theme.stroke, 1).fillCircle(m.railX, m.y, 8);
-    this.add.text(W / 2, FIN_TOP - 30, '▼ FINISH GATE', { fontFamily: 'Arial Black, sans-serif', fontSize: '14px', color: '#ffd166' }).setOrigin(0.5).setDepth(1);
+      (x, y, railX, len, thick) => this.addFinishFlipper(x, y, railX, len, thick));
+    this.add.text(W / 2, FIN_TOP - 30, '▼ FINISH GATE', { fontFamily: 'Arial Black, sans-serif', fontSize: '14px', color: '#cdd8df' }).setOrigin(0.5).setDepth(1);
+  }
+
+  private addFinishFlipper(x: number, y: number, railX: number, len: number, thick: number): void {
+    const angle = FIN_FLIPPER_BASE;
+    const cx = x + Math.cos(angle) * len / 2;
+    const cy = y + Math.sin(angle) * len / 2;
+    // Matter 정적 바디의 중심을 매 스텝 움직여, 한쪽 끝이 (x, y)에 고정된 회전 날개 구현.
+    const body = M.Bodies.rectangle(cx, cy, len, thick, { isStatic: true, angle, restitution: 0.08, friction: 0.01 });
+    this.matter.world.add(body);
+    const joint = this.add.graphics().setDepth(2);
+    joint.lineStyle(9, this.theme.wall, 1).lineBetween(railX, y, x, y);
+    joint.lineStyle(3, this.theme.stroke, 1).lineBetween(railX, y, x, y);
+    joint.fillStyle(this.theme.accent, 0.4).fillCircle(railX, y, 9);
+    const view = this.add.container(x, y).setDepth(3);
+    // 두꺼운 청록 날개에 은은한 광택만 추가. 회전 중심은 왼쪽 끝.
+    view.add(this.add.rectangle(len / 2, 0, len + 4, thick + 14, this.theme.accent, 0.16));
+    view.add(this.add.rectangle(len / 2, 0, len, thick, this.theme.accent).setStrokeStyle(2, 0xd7f8f4));
+    view.add(this.add.circle(0, 0, 12, this.theme.accent).setStrokeStyle(3, 0xe9ffff));
+    view.setRotation(angle);
+    this.finishFlipper = { x, y, len, body: body as MatterJS.BodyType, view };
   }
 
   private addPin(x: number, y: number, r: number, restitution: number): void {
@@ -291,8 +305,8 @@ export class PinballScene extends Phaser.Scene {
       bumper: (x, y, r = 18) => {
         // 탄성 범퍼: 반발 1.1 → 0.75로 낮춰 과도한 튕김 완화
         this.matter.add.circle(x, y + dy, r, { isStatic: true, restitution: 0.75, friction: 0 });
-        this.pinG.fillStyle(0xff4d6d).fillCircle(x, y + dy, r).lineStyle(4, 0xffd166, 1).strokeCircle(x, y + dy, r)
-          .fillStyle(0xffffff, 0.5).fillCircle(x - r * 0.3, y + dy - r * 0.3, r * 0.3);
+        this.pinG.fillStyle(t.plate).fillCircle(x, y + dy, r).lineStyle(3, t.accent, 0.75).strokeCircle(x, y + dy, r)
+          .fillStyle(0xffffff, 0.16).fillCircle(x - r * 0.3, y + dy - r * 0.3, r * 0.3);
       },
       rotor: (x, y, len, omega, arms = 1, thick = 16) => this.addRotor(x, y + dy, len, omega, arms, thick),
       portal: (ax, ay, bx, by, color) => this.addPortal({ ax, ay: ay + dy, bx, by: by + dy, color }),
@@ -307,9 +321,9 @@ export class PinballScene extends Phaser.Scene {
     this.matter.world.add(body);
     const view = this.add.container(x, y).setDepth(2);
     for (let i = 0; i < arms; i++) {
-      view.add(this.add.rectangle(0, 0, len, thick, this.theme.plate).setStrokeStyle(3, this.theme.stroke).setRotation((Math.PI * i) / arms));
+      view.add(this.add.rectangle(0, 0, len, thick, this.theme.accent, 0.7).setStrokeStyle(2, this.theme.stroke).setRotation((Math.PI * i) / arms));
     }
-    view.add(this.add.circle(0, 0, thick * 0.8, this.theme.stroke));
+    view.add(this.add.circle(0, 0, thick * 0.8, this.theme.accent));
     this.rotors.push({ body: body as unknown as MatterJS.BodyType, omega, view });
   }
 
@@ -417,6 +431,7 @@ export class PinballScene extends Phaser.Scene {
       if (n >= MAX_STEPS_PER_FRAME) this.acc = 0; // 탭 전환 등 큰 지연은 버림 (순간 이동 방지)
     }
     for (const r of this.rotors) r.view.setRotation(r.body.angle);
+    if (this.finishFlipper) this.finishFlipper.view.setRotation(this.finishFlipper.body.angle);
     this.hazards?.draw(this.elapsed);
     this.skillSys?.draw(this.elapsed);
     this.gate?.draw(this.elapsed);
@@ -448,6 +463,12 @@ export class PinballScene extends Phaser.Scene {
   private simStep(): void {
     // 회전체: 스텝마다 각도 갱신 + 각속도 반영(true) → 충돌 시 실제로 공을 밀어냄. 고정 스텝이라 배속과 무관하게 동일
     for (const r of this.rotors) M.Body.setAngle(r.body, r.body.angle + (r.omega * STEP_MS) / 1000, true);
+    if (this.finishFlipper) {
+      const f = this.finishFlipper;
+      const angle = FIN_FLIPPER_BASE + FIN_FLIPPER_SWING * Math.sin((this.elapsed / 1000) * FIN_FLIPPER_OMEGA);
+      M.Body.setAngle(f.body, angle, true);
+      M.Body.setPosition(f.body, { x: f.x + Math.cos(angle) * f.len / 2, y: f.y + Math.sin(angle) * f.len / 2 }, true);
+    }
     this.matter.world.step(STEP_MS);
     if (this.speedCap) { // 신규 맵 전용 속도 상한: 회전체·범퍼에 맞아 벽을 뚫거나 튕겨 나가지 않게
       for (const b of this.balls) {

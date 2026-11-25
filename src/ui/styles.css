@@ -438,8 +438,8 @@ img.avatar { border: none; border-radius: 0; object-fit: contain; background: tr
 .pb-chip i { width: 16px; height: 16px; border-radius: 50%; border: 2px solid #fff; }
 .pb-empty { color: #a99; font-size: 18px; }
 .pb-foot { margin-top: 20px; }
-.pb-screen { position: absolute; inset: 0; background: #0d0609; }
-.pb-host { position: absolute; left: 560px; top: 76px; border: 3px solid #d4a017; border-radius: 6px; overflow: hidden; }
+.pb-screen { position: absolute; inset: 0; background: #04070a; }
+.pb-host { position: absolute; left: 560px; top: 76px; border: 2px solid #526571; border-radius: 6px; overflow: hidden; }
 .pb-host canvas { display: block; }
 .pb-left { position: absolute; left: 24px; top: 96px; width: 510px; display: flex; flex-direction: column; gap: 14px; }
 .pb-stat { display: flex; justify-content: space-between; padding: 14px 20px; border-radius: 14px; background: rgba(255,255,255,.06); font-size: 22px; }
@@ -506,11 +506,11 @@ img.avatar { border: none; border-radius: 0; object-fit: contain; background: tr
 .pmap-icon { font-size: 24px; } .pmap-name { font-size: 18px; font-weight: 900; } .pmap-desc { font-size: 14px; color: #e8cfd8; }
 .pb-mode { padding: 10px 12px; } .pm-icon { font-size: 30px; } .pm-desc { font-size: 14px; }
 /* 핀볼 설정: 맵 미리보기 · 공 섞기 */
-.pb-mapview { display: flex; flex-direction: column; gap: 4px; padding: 6px; border-radius: 12px; border: 2px solid #4a1a24; background: #12050a; color: #f2dfe6; cursor: zoom-in; }
-.pb-mapview:hover { border-color: #ffd166; }
+.pb-mapview { display: flex; flex-direction: column; gap: 4px; padding: 6px; border-radius: 12px; border: 2px solid #33424e; background: #04070a; color: #dfe7ea; cursor: zoom-in; }
+.pb-mapview:hover { border-color: #16b8b4; }
 .pb-mapview-svg { width: 100%; height: 132px; display: block; }
-.pb-mapview-note { font-size: 13px; color: #d9b8c3; text-align: center; }
-.pb-mapview-modal { position: absolute; inset: 0; z-index: 50; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; padding: 40px; background: rgba(8,2,4,.92); cursor: zoom-out; }
+.pb-mapview-note { font-size: 13px; color: #a4b6be; text-align: center; }
+.pb-mapview-modal { position: absolute; inset: 0; z-index: 50; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; padding: 40px; background: rgba(2,5,8,.95); cursor: zoom-out; }
 .pb-mapview-big { width: 100%; max-height: 82%; }
 .pb-prev-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .pb-shuffled { font-size: 15px; color: #ff9db0; font-style: normal; }

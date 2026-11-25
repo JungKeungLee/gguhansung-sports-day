@@ -131,19 +131,35 @@ describe('핀볼 결승 이벤트·튕김 감소', () => {
   });
 });
 
-describe('핀볼 마지막 회전막대 미리보기', () => {
-  it('중앙 입구 대신 왼쪽 경사선 안쪽에 길이 140px로 배치', async () => {
+describe('핀볼 결승 한쪽 끝 고정형 회전 날개와 공통 스타일', () => {
+  it('5개 맵이 같은 검정 배경·회색 경계선, 고유 포인트 색만 사용', async () => {
+    const { PINBALL_MAPS } = await import('../src/pinball/maps');
+    for (const map of PINBALL_MAPS) {
+      expect(map.theme.bgTop).toBe(0x04070a);
+      expect(map.theme.bgBottom).toBe(0x04070a);
+      expect(map.theme.stroke).toBe(0xb8c6cf);
+      expect(map.theme.accent).toBeGreaterThan(0);
+    }
+  });
+  it('모든 맵 결승 날개는 왼쪽 경사선에 축이 붙고 234px이며 입구와 충돌하지 않음', async () => {
     const { pinballPreview } = await import('../src/pinball/PinballScene');
-    const preview = pinballPreview('basic');
-    const finRotor = preview.shapes.find((s) => s.k === 'rotor' && s.y >= preview.finTop);
-    expect(finRotor).toBeDefined();
-    if (!finRotor || finRotor.k !== 'rotor') return;
-    expect(finRotor.len).toBe(140);
-    expect(finRotor.x).toBeLessThan(preview.W / 2);
-    expect(finRotor.y).toBeGreaterThan(preview.finTop);
-    expect(finRotor.y).toBeLessThan(preview.gateY);
-    const railX = preview.W / 2 - preview.finGap / 2 - (preview.gateY - finRotor.y);
-    const normalClearance = (finRotor.x - railX) / Math.SQRT2 - finRotor.len / 2 - finRotor.thick / 2 - 9;
-    expect(normalClearance).toBeGreaterThan(26); // 회전 반경과 경사판 사이에 공 한 개가 통과할 정도의 여유
+    for (const id of ['basic', 'maze', 'rotor', 'portal', 'chaos'] as const) {
+      const pv = pinballPreview(id);
+      const blades = pv.shapes.filter((s) => s.k === 'flipper');
+      expect(blades).toHaveLength(1);
+      const flipper = blades[0];
+      if (flipper.k !== 'flipper') continue;
+      expect(flipper.len).toBe(234);
+      expect(flipper.x).toBeLessThan(pv.W / 2);
+      expect(flipper.x - flipper.railX).toBeCloseTo(14);
+      expect(flipper.y).toBeGreaterThan(pv.finTop);
+      for (const angle of [0.22, 0.41, 0.60]) {
+        const tipX = flipper.x + Math.cos(angle) * flipper.len;
+        const tipY = flipper.y + Math.sin(angle) * flipper.len;
+        const edgeX = pv.W / 2 - pv.finGap / 2 - (pv.gateY - tipY);
+        expect(tipX - edgeX).toBeGreaterThan(35); // 공·경사판 사이 여유
+        expect(tipY).toBeLessThan(pv.gateY - 25); // 날개가 좁은 입구를 직접 막지 않음
+      }
+    }
   });
 });

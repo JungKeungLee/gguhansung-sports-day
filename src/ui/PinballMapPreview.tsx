@@ -17,21 +17,26 @@ export function PinballMapPreview({ mapId }: { mapId: MapId }) {
   const art = (
     <g>
       <rect x={0} y={0} width={pv.W} height={pv.H} fill={hex(t.bgTop)} />
-      <rect x={40} y={40} width={pv.W - 80} height={pv.startBottom - 40} fill="#d4a017" opacity={0.18} />
-      <text x={pv.W / 2} y={34} textAnchor="middle" fontSize={34} fontWeight={900} fill="#ffd166">START</text>
-      <rect x={40} y={pv.gateY} width={pv.W - 80} height={pv.H - pv.gateY} fill="#c62828" opacity={0.18} />
+      <rect x={40} y={40} width={pv.W - 80} height={pv.startBottom - 40} fill="#ffffff" opacity={0.015} />
+      <text x={pv.W / 2} y={34} textAnchor="middle" fontSize={34} fontWeight={900} fill="#dbe6eb">START</text>
+      <rect x={40} y={pv.gateY} width={pv.W - 80} height={pv.H - pv.gateY} fill="#ffffff" opacity={0.012} />
       {pv.shapes.map((s, i) => {
         switch (s.k) {
           case 'rect': return <rect key={i} x={-s.w / 2} y={-s.h / 2} width={s.w} height={s.h} fill={hex(s.color)} stroke={hex(t.stroke)} strokeWidth={2} transform={`translate(${s.x} ${s.y}) rotate(${s.deg})`} />;
           case 'pin': return <circle key={i} cx={s.x} cy={s.y} r={s.r + 1} fill={hex(s.color)} />;
-          case 'bumper': return <circle key={i} cx={s.x} cy={s.y} r={s.r} fill="#ff4d6d" stroke="#ffd166" strokeWidth={4} />;
+          case 'bumper': return <circle key={i} cx={s.x} cy={s.y} r={s.r} fill={hex(t.plate)} stroke={hex(t.accent)} strokeWidth={3} />;
           case 'rotor': return (
+            <g key={i} transform={`translate(${s.x} ${s.y})`}>
+              {Array.from({ length: s.arms }, (_, a) => <rect key={a} x={-s.len / 2} y={-s.thick / 2} width={s.len} height={s.thick} fill={hex(t.accent)} opacity={0.8} stroke={hex(t.stroke)} strokeWidth={2} transform={`rotate(${(180 * a) / s.arms})`} />)}
+              <circle r={7} fill={hex(t.accent)} />
+            </g>
+          );
+          case 'flipper': return (
             <g key={i}>
-              {s.y >= pv.finTop && <line x1={pv.W / 2 - pv.finGap / 2 - (pv.gateY - s.y)} y1={s.y} x2={s.x} y2={s.y} stroke={hex(t.stroke)} strokeWidth={8} />}
-              <g transform={`translate(${s.x} ${s.y})`}>
-                <circle r={s.len / 2} fill="#ffd166" opacity={0.12} />
-                {Array.from({ length: s.arms }, (_, a) => <rect key={a} x={-s.len / 2} y={-s.thick / 2} width={s.len} height={s.thick} fill="#ffd166" transform={`rotate(${(180 * a) / s.arms})`} />)}
-                <circle r={6} fill="#fff" />
+              <line x1={s.railX} y1={s.y} x2={s.x} y2={s.y} stroke={hex(t.stroke)} strokeWidth={8} />
+              <g transform={`translate(${s.x} ${s.y}) rotate(${s.angle * 180 / Math.PI})`}>
+                <rect x={0} y={-s.thick / 2} width={s.len} height={s.thick} rx={4} fill={hex(t.accent)} stroke="#e6fffc" strokeWidth={2} />
+                <circle cx={0} cy={0} r={12} fill={hex(t.accent)} stroke="#ffffff" strokeWidth={3} />
               </g>
             </g>
           );
@@ -45,7 +50,7 @@ export function PinballMapPreview({ mapId }: { mapId: MapId }) {
         }
       })}
       <rect x={pv.W / 2 - pv.finGap / 2} y={pv.finishY - 8} width={pv.finGap} height={16} fill="#fff" />
-      <text x={pv.W / 2} y={pv.finishY + 100} textAnchor="middle" fontSize={40} fontWeight={900} fill="#ffd166">FINISH</text>
+      <text x={pv.W / 2} y={pv.finishY + 100} textAnchor="middle" fontSize={40} fontWeight={900} fill="#e5ecef">FINISH</text>
     </g>
   );
 

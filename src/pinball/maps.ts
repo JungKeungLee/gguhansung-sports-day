@@ -5,19 +5,25 @@ export type MapId = 'basic' | 'maze' | 'rotor' | 'portal' | 'chaos';
 
 export interface MapTheme {
   bgTop: number; bgBottom: number; grid: number; wall: number;
-  plate: number; stroke: number; pin: number; pinStroke: number;
+  plate: number; stroke: number; pin: number; pinStroke: number; accent: number;
 }
 
 export interface MapInfo { id: MapId; name: string; icon: string; desc: string; theme: MapTheme }
 
-const CRIMSON: MapTheme = { bgTop: 0x2a0a12, bgBottom: 0x120406, grid: 0x5a1a22, wall: 0x3a0d16, plate: 0x7a1a1a, stroke: 0xd4a017, pin: 0xd4a017, pinStroke: 0xfff1b8 };
+// 모든 맵 공통: 검은 배경, 연한 회색 경계선, 색을 절제한 장애물.
+// 맵 차이는 기능·배치와 소량의 강조색으로 구분한다.
+const MARBLE: MapTheme = {
+  bgTop: 0x04070a, bgBottom: 0x04070a, grid: 0x18212a,
+  wall: 0x090e14, plate: 0x111a22, stroke: 0xb8c6cf,
+  pin: 0x526773, pinStroke: 0x90a5b0, accent: 0x16b8b4,
+};
 
 export const PINBALL_MAPS: MapInfo[] = [
-  { id: 'basic', name: '기본 핀볼', icon: '🎱', desc: '지그재그 경사로와 느린 풍차, 부드럽게 굴러가는 마블 레이스', theme: CRIMSON },
-  { id: 'maze', name: '미로 핀볼', icon: '🌀', desc: '갈림길·지그재그 통로, 길마다 도착 시간이 달라요', theme: { ...CRIMSON, bgTop: 0x1f0d26, bgBottom: 0x0d0612, grid: 0x45204f, wall: 0x2b1033, plate: 0x5b2470, stroke: 0xe0b03c } },
-  { id: 'rotor', name: '회전 장애물 핀볼', icon: '🌪️', desc: '돌아가는 막대·풍차에 공이 이리저리 튕겨요', theme: { ...CRIMSON, bgTop: 0x0c1a2e, bgBottom: 0x060b14, grid: 0x1f3a5a, wall: 0x10223a, plate: 0x1d4f7a, stroke: 0xffd166, pin: 0x9fd3ff, pinStroke: 0xffffff } },
-  { id: 'portal', name: '순간이동 핀볼', icon: '🌌', desc: '포털에 빠진 공은 다른 곳으로 순간이동!', theme: { ...CRIMSON, bgTop: 0x170a2a, bgBottom: 0x080412, grid: 0x34205a, wall: 0x1e0f38, plate: 0x4a2a8a, stroke: 0x7ff3ff, pin: 0xc9a7ff, pinStroke: 0xffffff } },
-  { id: 'chaos', name: '대환장 랜덤 핀볼', icon: '🎲', desc: '미로·회전체·범퍼·포털이 매 판 새로 섞여요', theme: { ...CRIMSON, bgTop: 0x2a0a12, bgBottom: 0x0c0a14, grid: 0x6a3a12, plate: 0x8a3a12, stroke: 0xffd166 } },
+  { id: 'basic', name: '기본 핀볼', icon: '🎱', desc: '지그재그 경사로와 느린 풍차, 부드럽게 굴러가는 마블 레이스', theme: { ...MARBLE } },
+  { id: 'maze', name: '미로 핀볼', icon: '🌀', desc: '갈림길·지그재그 통로, 길마다 도착 시간이 달라요', theme: { ...MARBLE, accent: 0x9c9be0 } },
+  { id: 'rotor', name: '회전 장애물 핀볼', icon: '🌪️', desc: '돌아가는 막대·풍차에 공이 이리저리 튕겨요', theme: { ...MARBLE, accent: 0x16b8b4 } },
+  { id: 'portal', name: '순간이동 핀볼', icon: '🌌', desc: '포털에 빠진 공은 다른 곳으로 순간이동!', theme: { ...MARBLE, accent: 0x79acdf } },
+  { id: 'chaos', name: '대환장 랜덤 핀볼', icon: '🎲', desc: '미로·회전체·범퍼·포털이 매 판 새로 섞여요', theme: { ...MARBLE, accent: 0xe3b674 } },
 ];
 export const mapInfo = (id: MapId) => PINBALL_MAPS.find((m) => m.id === id)!;
 
