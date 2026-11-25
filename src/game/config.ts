@@ -1,5 +1,5 @@
 // 밸런스 설정값 — 테스트 결과에 따라 이 파일만 조정
-import type { ObstacleType } from './types';
+import type { CharId, ObstacleType } from './types';
 
 export const CONFIG = {
   dt: 1 / 60,                 // 고정 시뮬레이션 간격(초)
@@ -88,6 +88,12 @@ export const CONFIG = {
     window: [50, 70] as [number, number],
     minRunnerPos: 20,
     maxLeaderPos: 70, // 조건을 만족 못하면 이번에는 취소 (후반에 갑자기 반전 금지)
+    // 반전 경기만 적용. 기존 스킬/쿨타임은 그대로 두고 돌아오는 구간 주행속도를 미세 보정.
+    // 승자 미리 지정/순위 조작 없음. 밸런스 테스트로 10명 각각 비슷한 우승 확률에 접근.
+    speedFactor: {
+      yappu: 0.990, harunotsuki: 0.996, manjo: 1.006, moya: 1.001, yuntami: 1.005,
+      yamuji: 1.042, nanwony: 1.013, kkutinho: 1.018, kimokdok: 0.975, damyu: 0.990,
+    } as Record<CharId, number>,
   },
 
   // 꾸로의 괴롭힘: 경기당 정확히 1회. 경기 시작 시 선두 진행거리 at∈window 결정 → 선두 도달 시 발동

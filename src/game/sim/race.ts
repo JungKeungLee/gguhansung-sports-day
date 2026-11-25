@@ -142,9 +142,11 @@ export class Race {
       if (r.finished) continue;
       r.prevPos = r.pos;
       let next: number;
+      // 역주행에서만 속도를 캐릭터별 미세 보정. 정상 경기의 9~11% 밸런스는 유지.
+      const speedFactor = this.reversed ? cfg.reverseWorld.speedFactor[r.def.id] : 1;
       if (r.dash) {
         const cap = this.finishLine - 0.5;
-        const move = Math.min(r.dash.speed * dt, r.dash.remaining);
+        const move = Math.min(r.dash.speed * speedFactor * dt, r.dash.remaining);
         next = Math.min(r.pos + move, Math.max(r.pos, cap));
         r.dash.remaining -= move;
         if (r.dash.remaining <= 1e-6 || next >= cap) r.dash = null;
@@ -152,7 +154,7 @@ export class Race {
         next = crossObstacles(this, r, r.pos, next);
       } else {
         const catchUp = Math.min(cfg.catchUpMax, Math.max(0, leaderPos - r.pos) * cfg.catchUpPerMeter);
-        r.speed = computeSpeed(r, t0, zoneSlows(this, r), catchUp, cfg);
+        r.speed = computeSpeed(r, t0, zoneSlows(this, r), catchUp, cfg) * speedFactor;
         next = r.pos + r.speed * dt;
         next = crossObstacles(this, r, r.pos, next);
       }
