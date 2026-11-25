@@ -21,12 +21,12 @@ export const PINBALL_MAPS: MapInfo[] = [
 ];
 export const mapInfo = (id: MapId) => PINBALL_MAPS.find((m) => m.id === id)!;
 
-/** 반발계수: 기본 맵만 낮춰 위로 튀는 움직임을 줄이고 아래로 흐르게. 나머지 맵은 기존 값 유지 */
+/** 반발계수: 기본 맵은 유지하고 나머지 맵의 과도한 튕김만 완화 */
 /** staticFriction0: 판·핀 정지마찰 0 (Matter 는 두 물체 중 큰 정지마찰 사용 → 완만한 경사에서 공이 멈추는 것 방지) */
 export function mapPhysics(id: MapId): { ball: number; pin: number; plate: number; rotor: number; staticFriction0: boolean } {
   return id === 'basic'
     ? { ball: 0.25, pin: 0.25, plate: 0.1, rotor: 0.1, staticFriction0: true }   // 마블 레이스: 굴러가듯 부드럽게
-    : { ball: 0.55, pin: 0.6, plate: 0.4, rotor: 0.5, staticFriction0: false };
+    : { ball: 0.38, pin: 0.4, plate: 0.24, rotor: 0.28, staticFriction0: false };
 }
 
 /** 맵 생성용 API (씬이 구현) */

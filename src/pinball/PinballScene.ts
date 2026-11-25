@@ -70,10 +70,9 @@ function layoutFinishGate(rect: LayoutRect, rotor: (x: number, y: number, len: n
   const chuteH = FINISH_Y + 70 - (FIN_GATE_Y - 6);
   rect(W / 2 - FIN_GAP / 2 - 7, FIN_GATE_Y - 6 + chuteH / 2, 14, chuteH, 0, 'wall');
   rect(W / 2 + FIN_GAP / 2 + 7, FIN_GATE_Y - 6 + chuteH / 2, 14, chuteH, 0, 'wall');
-  // 결승 회전 막대: 깔때기 안에서 공 진입 순서를 바꿈 (마지막 역전). 느리고 반발 낮게(위로 튀지 않게).
-  // 길이 180·초당 1.65rad(끝 속도 ≈2.5px/스텝, 멀리 튕기지 않음), 반발 0.1 유지.
-  // 입구 위 190px: 막대 끝(반지름 90+두께)과 45° 판 사이 ≈45px ≥ 공 지름+여유 → 끼임 없음, 최저점이 입구보다 100px 위 → 입구 안 막음
-  rotor(W / 2, FIN_GATE_Y - 190, 180, 1.65, 1, 14);
+  // 회전 막대: 중앙 입구 대신 왼쪽 경사 테두리 안쪽으로 이동.
+  // 경사판과 공 지름 이상의 여유 공간 유지, 길이·회전속도를 낮춰 과도한 튕김과 끼임 방지.
+  rotor(WALL + 170, FIN_GATE_Y - 280, 60, 1.0, 1, 12);
 }
 
 // ───── 맵 미리보기 (물리 없음, 설정 화면 SVG 용) ─────
@@ -275,8 +274,8 @@ export class PinballScene extends Phaser.Scene {
       rect: (x, y, w, h, deg, color) => this.staticRect(x, y + dy, w, h, deg, color ?? t.plate),
       pin: (x, y, r = PIN_R) => this.addPin(x, y + dy, r, this.phys.pin),
       bumper: (x, y, r = 18) => {
-        // 탄성 범퍼: 반발 1.1 (신규 맵만, 속도 상한으로 튕겨 나감 방지)
-        this.matter.add.circle(x, y + dy, r, { isStatic: true, restitution: 1.1, friction: 0 });
+        // 탄성 범퍼: 반발 1.1 → 0.75로 낮춰 과도한 튕김 완화
+        this.matter.add.circle(x, y + dy, r, { isStatic: true, restitution: 0.75, friction: 0 });
         this.pinG.fillStyle(0xff4d6d).fillCircle(x, y + dy, r).lineStyle(4, 0xffd166, 1).strokeCircle(x, y + dy, r)
           .fillStyle(0xffffff, 0.5).fillCircle(x - r * 0.3, y + dy - r * 0.3, r * 0.3);
       },

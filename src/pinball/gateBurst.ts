@@ -1,5 +1,5 @@
 // 결승 입구 역전 이벤트: 마지막(결승) 입구 위 깔때기에 공이 몰리거나 정체되면 충전 → 3종 중 1개 무작위 발동
-//   💥 초강력 폭발(40%) · 🌀 블랙홀(30%) · 🌪️ 상승 바람(30%)  — 동시에 1개만, 발동 중에는 입구를 에너지 막으로 잠시 닫음
+//   첫 유효 발동은 💥 폭발 확정. 이후 폭발(40%) · 블랙홀(30%) · 상승 바람(30%) 추첨.
 // - 결승 입구에서만 동작. 점수·결과 계산은 건드리지 않음 (공의 속도·위치만 바꿈, 블랙홀 이동은 씬의 기존 순간이동 함수 사용 → ID·기록 유지)
 // - 판정은 일정 주기(SCAN_STEPS 스텝)마다 입구 주변만 집계. 이벤트 중에도 주변 공 목록을 주기적으로 갱신해 그 공들만 처리
 // - 입구(세로 통로)를 이미 지난 공·완주 공은 대상 아님
@@ -7,10 +7,10 @@
 // 모든 시간은 게임 내 시간(ms, 고정 스텝 누적) → 배속과 무관. 속도 단위: px/스텝 (중력 ≈ 0.28px/스텝²)
 import Phaser from 'phaser';
 import type { Rng } from '../game/rng';
+import { chooseGateEvent, type GateEventKind } from './gateRules';
+export { GATE_EVENT_WEIGHTS } from './gateRules';
+export type { GateEventKind } from './gateRules';
 
-export type GateEventKind = 'blast' | 'hole' | 'wind';
-export const GATE_EVENT_WEIGHTS: Record<GateEventKind, number> = { blast: 0.4, hole: 0.3, wind: 0.3 };
-const KINDS: GateEventKind[] = ['blast', 'hole', 'wind'];
 
 // ───── 정체 감지 (전체 공 수와 무관, 입구 주변 밀집·정체만 사용) ─────
 const SCAN_STEPS = 6;          // 6스텝(=100ms)마다 집계
@@ -26,7 +26,7 @@ const CHARGE_MS = 1200;        // 충전(경고) 표시 → 그 뒤 발동
 // ───── 연속 발동 방지 ─────
 const COOLDOWN_MS = 8000;      // 이벤트 종료 후 최소 대기
 const COOLDOWN_STEP_MS = 2000; // 발동할 때마다 대기 증가
-const MAX_EVENTS = 6;          // 경기당 최대 발동 → 모든 공이 결국 통과
+const MAX_EVENTS = 3;       // 반복 반동 감소: 결승 이벤트 최대 6→3회          // 경기당 최대 발동 → 모든 공이 결국 통과
 // ───── 입구 에너지 막 (이벤트 중 입구를 닫아, 흩어진 공이 다시 섞인 뒤 통과) ─────
 const LID_W_PAD = 30, LID_H = 10, LID_UP = 8; // 폭 = 입구 폭+30 (양쪽 깔때기 판에 걸침), 두께 10, 입구 위 8px
 const LID_RETRY_MS = 400;      // 막 자리에 공이 걸쳐 있으면 재시도, 그래도 막혀 있으면 이번 회차 생략 (겹침·끼임 방지)
@@ -234,10 +234,8 @@ export class GateBurst {
   }
 
   private pick(): GateEventKind {
-    if (this.h.force) return this.h.force;
-    let r = this.h.rng.next();
-    for (const k of KINDS) { r -= GATE_EVENT_WEIGHTS[k]; if (r < 0) return k; }
-    return 'blast';
+    // 첫 유효 발동은 폭발 확정. 그 후에만 블랙홀·바람 추첨 (QA 강제 종류 우선).
+    return chooseGateEvent(this.stats.events.length, () => this.h.rng.next(), this.h.force);
   }
 
   private fire(now: number): void {

@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { MAX_BALLS, type BallRecord, parseEntries, rankBalls } from '../src/pinball/entries';
+import { chooseGateEvent } from '../src/pinball/gateRules';
+import { mapPhysics } from '../src/pinball/maps';
 
 describe('핀볼 참가자 입력', () => {
   it('닉네임*개수 문법: 예시 → 총 8개, 공마다 고유 ID', () => {
@@ -90,5 +92,29 @@ describe('쉼표 구분 입력', () => {
     expect(r.total).toBe(19);
     expect(parseEntries('맛있는 피자*3 , 치킨').lines).toEqual([{ name: '맛있는 피자', count: 3 }, { name: '치킨', count: 1 }]);
     expect(parseEntries('야뿌,,*2').errors.some((e) => e.includes('닉네임이 비어'))).toBe(true);
+  });
+});
+
+describe('핀볼 결승 이벤트·튕김 감소', () => {
+  it('첫 유효 이벤트는 폭발이고, 이후에만 바람·블랙홀이 나올 수 있음', () => {
+    let rolls = 0;
+    const random = () => { rolls++; return 0.99; };
+    expect(chooseGateEvent(0, random)).toBe('blast');
+    expect(rolls).toBe(0); // 첫 이벤트는 난수 미소비
+    expect(chooseGateEvent(1, () => 0.2)).toBe('blast');
+    expect(chooseGateEvent(1, () => 0.5)).toBe('hole');
+    expect(chooseGateEvent(1, random)).toBe('wind');
+    expect(chooseGateEvent(0, random, 'wind')).toBe('wind'); // QA 강제 선택
+  });
+
+  it('기본 맵은 유지하고 나머지 맵의 공·핀·판·회전체 반발이 낮아짐', () => {
+    expect(mapPhysics('basic').ball).toBe(0.25);
+    for (const id of ['maze', 'rotor', 'portal', 'chaos'] as const) {
+      const p = mapPhysics(id);
+      expect(p.ball).toBe(0.38);
+      expect(p.pin).toBe(0.4);
+      expect(p.plate).toBe(0.24);
+      expect(p.rotor).toBe(0.28);
+    }
   });
 });
