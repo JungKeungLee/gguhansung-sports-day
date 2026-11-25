@@ -272,6 +272,27 @@ describe('결승선 이동', () => {
 });
 
 describe('반전 세계 전용 속도 보정', () => {
+  it('반전 중에는 실제 이동속도만 조금 달라지고 출발점 결승은 유지', () => {
+    const normal = new Race(['yappu', 'moya'], 712, cfgNoEvents);
+    const boostedCfg = { ...cfgNoEvents, reverseWorld: {
+      ...cfgNoEvents.reverseWorld,
+      speedFactor: { ...cfgNoEvents.reverseWorld.speedFactor, yappu: 1.1 },
+    } };
+    const boosted = new Race(['yappu', 'moya'], 712, boostedCfg);
+    for (const race of [normal, boosted]) {
+      for (const [i, runner] of race.runners.entries()) {
+        runner.pos = runner.prevPos = 50 + i;
+        runner.cds = [999, 999];
+        runner.onceUsed = [true, true];
+      }
+      race.obstaclesByLane.forEach((lane) => lane.length = 0);
+      race.reverseWorld();
+      race.step();
+      expect(race.physicalPos(race.finishLine)).toBe(0);
+    }
+    expect(boosted.runners[0].pos).toBeGreaterThan(normal.runners[0].pos);
+  });
+
   it('정상 경기에서는 보정값과 무관하게 동일 시드·동일 결과', () => {
     const ids = ALL;
     const a = new Race(ids, 1987, CONFIG).runToEnd();

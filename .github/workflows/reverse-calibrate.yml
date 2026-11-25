@@ -14,4 +14,5 @@ jobs:
       - run: npm ci
       - run: npm test
       - run: npm run build
-      - run: npx vite-node scripts/reverse-calibrate.ts 6000 5500
+      - run: npx vite-node scripts/reverse-calibrate.ts 15000 11500
+      - run: npm run balance -- 10000

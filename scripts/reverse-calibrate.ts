@@ -8,10 +8,7 @@ import type { CharId } from '../src/game/types';
 const ids=CHARACTERS.map(c=>c.id),N=Number(process.argv[2]??3500),OFFSET=Number(process.argv[3]??2000);
 type Factors=Record<CharId,number>;
 const base=CONFIG.reverseWorld.speedFactor;
-const candidates: Array<[string,Partial<Factors>]>=[
-['tinyC',{yappu:0.989,harunotsuki:0.994,manjo:1.006,moya:1.002,yuntami:1.003,yamuji:1.035,nanwony:1.011,kkutinho:1.018,kimokdok:0.984,damyu:0.987}],
-['tinyD',{yappu:0.990,harunotsuki:0.995,manjo:1.005,moya:1.002,yuntami:1.006,yamuji:1.039,nanwony:1.012,kkutinho:1.017,kimokdok:0.981,damyu:0.990}],
-];
+const candidates: Array<[string,Partial<Factors>]>=[['calibrated',{}]];
 for(const [name,factors] of candidates){
  const speedFactor={...base,...factors};
  const cfg={...CONFIG,finishMove:{...CONFIG.finishMove,outcomes:[{to:-1,w:1}]},reverseWorld:{...CONFIG.reverseWorld,speedFactor}};
