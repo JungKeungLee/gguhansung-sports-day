@@ -6,8 +6,8 @@ export const CHARACTERS: CharDef[] = [
   {
     id: 'yappu', name: '야뿌', type: '탄산 폭주형', color: '#e8453c', accent: '#ffd0cc',
     skills: [
-      { id: 'yappu_cola', name: '뿌카콜라', desc: '2.5초 동안 속도 40% 증가', cooldown: 10, fx: 'cola',
-        actions: [{ type: 'boost', value: 0.4, dur: 2.5 }] },
+      { id: 'yappu_cola', name: '뿌카콜라', desc: '2.5초 동안 속도 42% 증가', cooldown: 10, fx: 'cola',
+        actions: [{ type: 'boost', value: 0.42, dur: 2.5 }] },
       { id: 'yappu_dentist', name: '치과 가는 길', desc: '바로 앞 1명 1.5초간 25% 감속', cooldown: 10, fx: 'cola',
         actions: [{ type: 'slow', target: 'nearestAhead', value: 0.25, dur: 1.5, maxRange: 20 }] },
     ],
@@ -22,8 +22,8 @@ export const CHARACTERS: CharDef[] = [
       { id: 'haru_shadow', name: '달 그림자', desc: '다음 장애물 1개 무시 + 1초 방해 면역', cooldown: 14, fx: 'shield',
         actions: [{ type: 'dodge', count: 1, window: 3 }, { type: 'immune', kind: 'debuff', dur: 1 }] },
     ],
-    ult: { id: 'haru_ult', name: '월광 도약', cutin: '달빛이 길을 연다…', trigger: [0.2, 0.7], desc: '전방 최대 12m 순간이동 (앞 캐릭터 바로 뒤까지)', cooldown: 0, fx: 'moon',
-      actions: [{ type: 'teleport', dist: 12 }] },
+    ult: { id: 'haru_ult', name: '월광 도약', cutin: '달빛이 길을 연다…', trigger: [0.2, 0.7], desc: '전방 최대 약 23m 순간이동 (앞 캐릭터 바로 뒤까지)', cooldown: 0, fx: 'moon',
+      actions: [{ type: 'teleport', dist: 11.4 }] },
   },
   {
     id: 'manjo', name: '만조', type: '파도 소환형', color: '#1e88e5', accent: '#cfe8ff',
@@ -44,8 +44,8 @@ export const CHARACTERS: CharDef[] = [
       { id: 'moya_boo', name: '깜짝 놀랐먀', desc: '근처 1명(앞 우선) 1.5초간 30% 감속', cooldown: 9, fx: 'cat',
         actions: [{ type: 'slow', target: 'nearby', value: 0.3, dur: 1.5, maxRange: 10 }] },
     ],
-    ult: { id: 'moya_ult', name: '고양이 대소동', cutin: '먀아아앙~!!', trigger: [0.4, 0.97], decisive: true, desc: '앞선 최대 2명 2초 혼란 + 4초간 속도 55% 증가', cooldown: 0, fx: 'cat',
-      actions: [{ type: 'slow', target: 'aheadUpTo2', value: 0.5, dur: 2, confuse: true }, { type: 'boost', value: 0.55, dur: 4 }] },
+    ult: { id: 'moya_ult', name: '고양이 대소동', cutin: '먀아아앙~!!', trigger: [0.4, 0.97], decisive: true, desc: '앞선 최대 2명 2초 혼란 + 4초간 속도 62.5% 증가', cooldown: 0, fx: 'cat',
+      actions: [{ type: 'slow', target: 'aheadUpTo2', value: 0.5, dur: 2, confuse: true }, { type: 'boost', value: 0.625, dur: 4 }] },
   },
   {
     id: 'yuntami', name: '윤타미', type: '프로게이머형', color: '#00b894', accent: '#c8f7ea',
@@ -64,8 +64,8 @@ export const CHARACTERS: CharDef[] = [
     skills: [
       { id: 'yamu_start', name: '야무진 출발', desc: '경기 시작 후 5초 동안 20% 가속 (1회)', cooldown: 0, once: true, condition: 'raceStart', fx: 'brain',
         actions: [{ type: 'boost', value: 0.2, dur: 5 }] },
-      { id: 'yamu_trap', name: '완벽한 함정', desc: '뒤쪽 트랙에 함정 설치 (걸린 상대 1.5초간 35% 감속) 후 2.15초간 35% 가속', cooldown: 8, fx: 'trap',
-        actions: [{ type: 'trap', value: 0.35, dur: 1.5, maxRange: 25, life: 10 }, { type: 'boost', value: 0.35, dur: 2.15 }] },
+      { id: 'yamu_trap', name: '완벽한 함정', desc: '뒤쪽 트랙에 함정 설치 (걸린 상대 1.5초간 35% 감속) 후 2.22초간 35% 가속', cooldown: 8, fx: 'trap',
+        actions: [{ type: 'trap', value: 0.35, dur: 1.5, maxRange: 25, life: 10 }, { type: 'boost', value: 0.35, dur: 2.22 }] },
     ],
     ult: { id: 'yamu_ult', name: '계획대로야', cutin: '전부 계획대로야.', trigger: [0.6, 0.95], decisive: true, desc: '감속 해제 + 4초간 50% 가속 + 앞 1명 2초간 20% 감속', cooldown: 0, fx: 'brain',
       actions: [{ type: 'cleanse' }, { type: 'boost', value: 0.5, dur: 4 }, { type: 'slow', target: 'nearestAhead', value: 0.2, dur: 2 }] },
@@ -75,8 +75,8 @@ export const CHARACTERS: CharDef[] = [
     skills: [
       { id: 'wony_run', name: '워냥이 질주', desc: '2.5초 동안 속도 35% 증가', cooldown: 14, fx: 'thunder',
         actions: [{ type: 'boost', value: 0.35, dur: 2.5 }] },
-      { id: 'wony_notover', name: '아직 안 끝났어', desc: '하위 절반일 때 3초간 40% 가속', cooldown: 12, condition: 'bottomHalf', fx: 'thunder',
-        actions: [{ type: 'boost', value: 0.4, dur: 3 }] },
+      { id: 'wony_notover', name: '아직 안 끝났어', desc: '하위 절반일 때 3초간 41% 가속', cooldown: 12, condition: 'bottomHalf', fx: 'thunder',
+        actions: [{ type: 'boost', value: 0.41, dur: 3 }] },
     ],
     ult: { id: 'wony_ult', name: '워니 타임', cutin: '지금부터 워니 타임!!', desc: '5초간 55% 가속 + 주변 1초간 20% 감속', cooldown: 0, fx: 'thunder',
       actions: [{ type: 'boost', value: 0.55, dur: 5 }, { type: 'slow', target: 'around', radius: 6, value: 0.2, dur: 1 }] },
@@ -89,14 +89,14 @@ export const CHARACTERS: CharDef[] = [
       { id: 'kkut_feint', name: '페인트 모션', desc: '추격자 1명 2초간 25% 감속', cooldown: 13, fx: 'ball',
         actions: [{ type: 'slow', target: 'nearestBehind', value: 0.25, dur: 2, maxRange: 15 }] },
     ],
-    ult: { id: 'kkut_ult', name: '결승골 슛', cutin: '골—————!!', desc: '전방 약 11m 돌진 + 경로 장애물 파괴', cooldown: 0, fx: 'ball',
-      actions: [{ type: 'dash', dist: 9.3, speed: 8 }] },
+    ult: { id: 'kkut_ult', name: '결승골 슛', cutin: '골—————!!', desc: '전방 최대 약 18m 돌진 + 경로 장애물 파괴', cooldown: 0, fx: 'ball',
+      actions: [{ type: 'dash', dist: 9, speed: 8 }] },
   },
   {
     id: 'kimokdok', name: '김옥독', type: '지휘관형', color: '#34495e', accent: '#d5dde5',
     skills: [
-      { id: 'okdok_calc', name: '옥독의 계산', desc: '선두와 10m 이상 차이 시 3초간 30% 가속', cooldown: 8, condition: 'gapAhead10', fx: 'brain',
-        actions: [{ type: 'boost', value: 0.3, dur: 3 }] },
+      { id: 'okdok_calc', name: '옥독의 계산', desc: '선두와 10m 이상 차이 시 3초간 26.5% 가속', cooldown: 8, condition: 'gapAhead10', fx: 'brain',
+        actions: [{ type: 'boost', value: 0.265, dur: 3 }] },
       { id: 'okdok_jam', name: '전술 방해', desc: '선두 2초간 25% 감속 (자신이 선두면 미사용)', cooldown: 10, condition: 'notLeader', fx: 'brain',
         actions: [{ type: 'slow', target: 'leader', value: 0.25, dur: 2 }] },
     ],
@@ -118,8 +118,8 @@ export const CHARACTERS: CharDef[] = [
           { label: '흉(상대 감속)', actions: [{ type: 'slow', target: 'nearestAhead', value: 0.25, dur: 1.5, maxRange: 20 }] },
         ] }] },
     ],
-    ult: { id: 'damyu_ult', name: '뮤람단 총출동', cutin: '뮤람단, 총출동—!', desc: '5초 동안 빠르게 가속 증가 (최대 60%)', cooldown: 0, fx: 'star',
-      actions: [{ type: 'ramp', step: 0.28, max: 0.6, dur: 5 }] },
+    ult: { id: 'damyu_ult', name: '뮤람단 총출동', cutin: '뮤람단, 총출동—!', desc: '5초 동안 빠르게 가속 증가 (최대 68%)', cooldown: 0, fx: 'star',
+      actions: [{ type: 'ramp', step: 0.28, max: 0.68, dur: 5 }] },
   },
 ];
 
