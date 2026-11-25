@@ -297,8 +297,9 @@ export class PinballEvents {
       if (pinsOk && s.k === 'pin' && s.r <= 8) continue;
       const hit = s.k === 'rect' ? rectBox(s, x, y, hw, hh)
         : s.k === 'rotor' ? circBox(s.x, s.y, s.len / 2 + 8, x, y, hw, hh)
-          : s.k === 'portal' ? circBox(s.ax, s.ay, 34, x, y, hw, hh) || circBox(s.bx, s.by, 30, x, y, hw, hh)
-            : circBox(s.x, s.y, s.r, x, y, hw, hh);
+          : s.k === 'flipper' ? circBox(s.x, s.y, s.len + s.thick / 2 + 8, x, y, hw, hh)
+            : s.k === 'portal' ? circBox(s.ax, s.ay, 34, x, y, hw, hh) || circBox(s.bx, s.by, 30, x, y, hw, hh)
+              : circBox(s.x, s.y, s.r, x, y, hw, hh);
       if (hit) return false;
     }
     return true;
