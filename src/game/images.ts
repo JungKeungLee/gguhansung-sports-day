@@ -89,6 +89,9 @@ export const assetUrl = (path: string) => baseUrl() + path;
 export const FLIP_X: Partial<Record<CharId, Pose[]>> = { damyu: ['run', 'skill', 'ultimate'] };
 export const isFlipped = (id: CharId, pose: Pose) => !!FLIP_X[id]?.includes(pose);
 
+/** 꾸한성 마스코트 꾸로 (꾸로의 괴롭힘 이벤트 컷인). 원본 그대로 사용 (투명 배경) */
+export const KKURO_IMAGE = 'characters/kkuro.webp';
+
 /** 결승선 이벤트 종류 (화면 연출 구분용) */
 export type FinishKind = 'shorten' | 'extend' | 'mega';
 export const finishKind = (from: number, to: number): FinishKind => (to < from ? 'shorten' : to >= 150 ? 'mega' : 'extend');
@@ -113,7 +116,7 @@ export const UI_IMAGES = {
   shield: 'ui/powerup_shield_icon.webp',          // 면역
   result: 'ui/race_result_panel.webp',            // 결과 패널 (빈 패널)
   skill: 'ui/skill_activation_banner.webp',       // 스킬 발동 알림
-  speed: 'ui/speed_controls_panel.webp',          // 배속 버튼 (1배속/2배속/설정)
+  speed: 'ui/speed_controls_panel.webp',          // 배속 버튼 (1배속/3배속/설정, 원본 2배속 이미지는 assets-backup/ui)
   question: 'ui/status_question_icon.webp',       // 혼란
   warning: 'ui/status_warning_icon.webp',         // 감속·넘어짐
   ultimate: 'ui/ultimate_activation_banner.webp', // 필살기 발동 (컷인)

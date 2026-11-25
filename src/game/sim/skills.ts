@@ -13,6 +13,9 @@ function others(race: Race, r: Runner): Runner[] {
   return race.runners.filter((o) => o !== r && !o.finished);
 }
 
+/** 캐릭터 데이터 거리·돌진 속도 환산 배율 (기본속도 / 기준속도 2.75) */
+const ds = (race: Race) => race.cfg.baseSpeed / race.cfg.speedRef;
+
 export function nearestAhead(race: Race, r: Runner, maxRange = Infinity): Runner | null {
   let best: Runner | null = null;
   for (const o of others(race, r)) {
@@ -91,8 +94,8 @@ function teleportDest(race: Race, r: Runner, dist: number): number {
 function actionValid(race: Race, r: Runner, a: Action): boolean {
   switch (a.type) {
     case 'slow': return findTargets(race, r, a.target, a).length > 0;
-    case 'teleport': return teleportDest(race, r, a.dist) - r.pos >= TELEPORT_MIN;
-    case 'dash': return Math.min(r.pos + a.dist, race.finishLine - FINISH_GUARD) - r.pos >= DASH_MIN;
+    case 'teleport': return teleportDest(race, r, a.dist * ds(race)) - r.pos >= TELEPORT_MIN;
+    case 'dash': return Math.min(r.pos + a.dist * ds(race), race.finishLine - FINISH_GUARD) - r.pos >= DASH_MIN;
     case 'pushAhead': return others(race, r).some((o) => o.pos > r.pos);
     case 'trap': { const b = nearestBehind(race, r, a.maxRange); return !!b && r.pos - b.pos >= 1.5; }
     case 'random': return a.options.some((o) => o.actions.every((x) => actionValid(race, r, x)));
@@ -126,14 +129,14 @@ function exec(race: Race, r: Runner, a: Action, s: SkillDef, tag: 'skill' | 'ult
     case 'cleanse': cleanseSlows(r); break;
     case 'teleport': {
       const from = r.pos;
-      const to = teleportDest(race, r, a.dist * k);
+      const to = teleportDest(race, r, a.dist * k * ds(race));
       r.pos = r.prevPos = to;
       race.emit({ type: 'teleport', actor: r.index, from, to });
       break;
     }
     case 'dash': {
-      const to = Math.min(r.pos + a.dist * k, race.finishLine - FINISH_GUARD);
-      r.dash = { remaining: to - r.pos, speed: a.speed };
+      const to = Math.min(r.pos + a.dist * k * ds(race), race.finishLine - FINISH_GUARD);
+      r.dash = { remaining: to - r.pos, speed: a.speed * ds(race) }; // 기본속도 대비 배율 유지
       for (const ob of race.obstaclesByLane[r.lane]) {
         if (ob.state === 'idle' && ob.pos > r.pos && ob.pos <= to + 0.5) ob.state = 'destroyed';
       }
@@ -147,7 +150,7 @@ function exec(race: Race, r: Runner, a: Action, s: SkillDef, tag: 'skill' | 'ult
           race.emit({ type: 'blocked', actor: r.index, target: o.index, skillId: s.id });
           continue;
         }
-        const d = Math.min(a.dist * k, o.pos);
+        const d = Math.min(a.dist * k * ds(race), o.pos);
         if (d <= 0) continue;
         const from = o.pos;
         o.pos = o.prevPos = o.pos - d;
@@ -228,7 +231,7 @@ function ultSituationOk(race: Race, r: Runner): boolean {
     if (!ahead) return true; // 선두 → 가속으로 대체
     return others(race, r).some((o) => o.pos - r.pos >= 3);
   }
-  if (a.type === 'teleport') return teleportDest(race, r, a.dist) - r.pos >= 3;
+  if (a.type === 'teleport') return teleportDest(race, r, a.dist * ds(race)) - r.pos >= 3;
   return true;
 }
 

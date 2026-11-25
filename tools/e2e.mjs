@@ -49,7 +49,7 @@ try {
     if (c.full) await page.screenshot({ path: `${out}/${tag}-select.png` });
     await start.click();
     await page.waitForTimeout(1200);
-    if (c.speed2) await page.getByRole('button', { name: '2배속', exact: true }).click();
+    if (c.speed2) await page.getByRole('button', { name: '3배속', exact: true }).click();
     await page.waitForTimeout(c.full ? 9000 : 5000);
     await page.screenshot({ path: `${out}/${tag}-race.png` });
     log(`${tag}: FPS ${(await fpsOf(page)).toFixed(1)}, 게이지 노출 ${/gauge|게이지/i.test(await page.content())}`);
@@ -78,7 +78,7 @@ try {
       for (let k = 0; k < 2; k++) { // 다시 하기 2회 반복 후 메모리·캔버스 정리 확인
         await page.getByRole('button', { name: /다시 하기/ }).click();
         await page.waitForTimeout(1000);
-        await page.getByRole('button', { name: '2배속', exact: true }).click();
+        await page.getByRole('button', { name: '3배속', exact: true }).click();
         await page.locator('.result-screen').waitFor({ timeout: 150000 });
       }
       await page.evaluate(() => (window.gc ? window.gc() : 0));

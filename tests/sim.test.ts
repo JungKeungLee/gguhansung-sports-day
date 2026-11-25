@@ -370,3 +370,63 @@ describe('이미지 매니페스트', () => {
     m.CHARACTER_IMAGES.moya = backup;
   });
 });
+
+describe('속도·장애물·꾸로의 괴롭힘 (2026-11)', () => {
+  it('기본속도 5.5m/s, 장애물 기존 대비 약 70% (100m 기준 레인당 평균 4.34 → 약 3.05, 종류 비율 유지)', async () => {
+    const { generateObstacles } = await import('../src/game/sim/obstacles');
+    const { Rng } = await import('../src/game/rng');
+    expect(CONFIG.baseSpeed).toBe(5.5);
+    let n = 0;
+    for (let s = 0; s < 800; s++) n += generateObstacles(new Rng(s * 7919 + 1), 1, CONFIG)[0].filter((o) => o.pos < 100).length;
+    expect(n / 800).toBeGreaterThan(2.85);
+    expect(n / 800).toBeLessThan(3.25); // 기존 4.34 × 0.7 ≈ 3.04
+  });
+  it('3배속: 같은 시드는 프레임당 스텝 수와 무관하게 같은 결과', () => {
+    const run = (speed: number) => {
+      const race = new Race(ALL, 4242);
+      let acc = 0;
+      while (!race.done) { acc += (16.7 / 1000) * speed; while (acc >= race.cfg.dt && !race.done) { race.step(); acc -= race.cfg.dt; } }
+      return buildResults(race).map((x) => `${x.id}:${x.timeMs}`).join(',');
+    };
+    expect(run(3)).toBe(run(1));
+  });
+  it('꾸로: 경기당 정확히 1회, 인원별 대상 수 범위, 중복 없음, 감속/밀치기 적용', () => {
+    const want: Record<number, [number, number]> = { 2: [1, 1], 3: [1, 2], 4: [2, 3], 5: [3, 3], 6: [3, 4], 7: [4, 5], 8: [4, 5], 9: [5, 7], 10: [7, 8] };
+    for (let n = 2; n <= 10; n++) {
+      const seen = new Set<number>();
+      for (let s = 0; s < 60; s++) {
+        const race = new Race(ALL.slice(0, n), s * 31 + n).runToEnd();
+        const heads = race.events.filter((e) => e.type === 'kkuro');
+        expect(heads.length).toBe(1);
+        expect(race.kkuroPlan.at).toBeGreaterThanOrEqual(45);
+        expect(race.kkuroPlan.at).toBeLessThanOrEqual(60);
+        const hits = race.events.filter((e) => e.type === 'kkuroHit');
+        expect(hits.every((e) => e.t === heads[0].t)).toBe(true);
+        const targets = hits.map((e) => e.target!);
+        expect(new Set(targets).size).toBe(targets.length);
+        expect(targets.length).toBeGreaterThanOrEqual(want[n][0]);
+        expect(targets.length).toBeLessThanOrEqual(want[n][1]);
+        seen.add(targets.length);
+      }
+      expect(seen.size).toBe(want[n][1] - want[n][0] + 1); // 범위 내 모든 정수가 실제로 나옴
+    }
+  });
+  it('꾸로 효과: 감속 35%·1.8초 / 3m 후퇴(위치·이전 위치 함께, 최소 0m), 완주자 제외', () => {
+    const race = new Race(ALL, 77, cfgNoEvents);
+    for (const x of race.runners) { x.pos = x.prevPos = 50; }
+    race.runners[0].pos = race.runners[0].prevPos = 1; // 0m 하한 확인용
+    race.runners[1].finished = true; race.runners[1].finishTime = 1; race.finishedCount = 1;
+    race.kkuroPlan.at = 0;
+    race.step();
+    const hits = race.events.filter((e) => e.type === 'kkuroHit');
+    expect(hits.length).toBeGreaterThanOrEqual(7);
+    expect(hits.some((e) => e.target === 1)).toBe(false);
+    for (const e of hits) {
+      const x = race.runners[e.target!];
+      if (e.label === 'slow') expect(x.effects.some((f) => f.tag === 'kkuro' && f.value === -0.35 && Math.abs(f.until - f.start - 1.8) < 1e-9)).toBe(true);
+      if (e.label === 'push') expect(e.to).toBe(Math.max(0, e.from! - 3));
+    }
+    race.runToEnd();
+    expect(race.events.filter((e) => e.type === 'kkuro').length).toBe(1);
+  });
+});

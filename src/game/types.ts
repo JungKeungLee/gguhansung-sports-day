@@ -85,7 +85,7 @@ export interface Trap {
 
 export type EffectKind = 'speed' | 'immuneDebuff' | 'immuneObstacle' | 'autoDodge';
 export type EffectTag =
-  | 'skill' | 'ult' | 'slip' | 'fall' | 'bump' | 'zone' | 'debuff' | 'confused' | 'cheer' | 'ramp';
+  | 'skill' | 'ult' | 'slip' | 'fall' | 'bump' | 'zone' | 'debuff' | 'confused' | 'cheer' | 'ramp' | 'kkuro';
 
 export interface Effect {
   kind: EffectKind;
@@ -100,7 +100,7 @@ export interface Effect {
 export type RaceEventType =
   | 'start' | 'skill' | 'ult' | 'obstacleHit' | 'obstacleDodge' | 'obstacleImmune' | 'obstacleProtected'
   | 'debuff' | 'blocked' | 'teleport' | 'dash' | 'push' | 'swap' | 'trapSet' | 'trapHit'
-  | 'finishMove' | 'cheer' | 'leadChange' | 'finish' | 'end';
+  | 'finishMove' | 'cheer' | 'kkuroHit' | 'kkuro' | 'leadChange' | 'finish' | 'end';
 
 export interface RaceEvent {
   t: number;
@@ -114,7 +114,7 @@ export interface RaceEvent {
   from?: number;
   to?: number;
   value?: number;
-  label?: string;
+  label?: string;        // kkuroHit: 'slow' | 'push' | 'blocked', kkuro: '감속수/밀치기수/막음수'
 }
 
 export interface RunnerStats {

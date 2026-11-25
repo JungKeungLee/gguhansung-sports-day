@@ -707,6 +707,24 @@ export class RaceScene extends Phaser.Scene {
         this.fxImg('impact', b.x, b.y, { size: R * 2.6, dur: 550 });
         break;
       }
+      case 'kkuroHit': { // 꾸로의 괴롭힘: 대상마다 효과 구분 (감속=충격, 밀치기=파도, 막음=보호막)
+        const b = this.posOf(e.target!);
+        if (e.label === 'blocked') {
+          if (!this.fxImg('shield', b.x, b.y, { size: R * 3.2, dur: 650 })) this.ring(b.x, b.y, 0x80deea, R * 2.2);
+          this.popText(b.x, b.y - R * 1.4, '🛡️ 막음!', '#80deea', 15);
+        } else if (e.label === 'push') {
+          if (!this.fxImg('wave', b.x + R, b.y, { size: R * 3.6, dx: -R * 3, dur: 750 })) this.wave(b.x, this.laneY(this.race.runners[e.target!].lane));
+          this.popText(b.x, b.y - R * 1.4, '💥 밀려남!', '#ff8a80', 16);
+        } else {
+          this.fxImg('impact', b.x, b.y, { size: R * 2.6, dur: 600 });
+          this.popText(b.x, b.y - R * 1.4, '😈 발 묶임!', '#ce93d8', 16);
+        }
+        break;
+      }
+      case 'kkuro':
+        this.cameras.main.flash(220, 150, 80, 220, false);
+        this.cameras.main.shake(300, 0.005);
+        break;
       case 'cheer': {
         const { x, y } = this.posOf(e.actor!);
         this.popText(x, y - R * 1.6, '👏 응원 버프!', '#ffeb3b', 16);
