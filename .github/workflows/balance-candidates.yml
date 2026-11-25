@@ -12,4 +12,4 @@ jobs:
           node-version: '22'
           cache: npm
       - run: npm ci
-      - run: npx vite-node scripts/balance-candidates.ts 3000
+      - run: npx vite-node scripts/balance-candidates.ts 10000
