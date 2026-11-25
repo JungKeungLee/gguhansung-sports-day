@@ -14,7 +14,8 @@ import { UiImg } from './UiImg';
 /** 컷인 대기열: 필살기와 꾸로의 괴롭힘을 같은 대기열에서 1개씩 표시 (겹치지 않음) */
 type Cutin =
   | { kind: 'ult'; id: number; actor: number; name: string; line: string }
-  | { kind: 'kkuro'; id: number; hits: { actor: number; effect: 'slow' | 'push' | 'blocked' }[] };
+  | { kind: 'kkuro'; id: number; hits: { actor: number; effect: 'slow' | 'push' | 'blocked' }[] }
+  | { kind: 'reverse'; id: number };
 const KKURO_EFFECT = { slow: '😈 발 묶임', push: '💥 밀려남', blocked: '🛡️ 막음' } as const;
 const KKURO_COMMENT_MAX = 3; // 꾸로 개별 중계는 최대 3줄 (나머지는 요약 1줄 + 컷인 목록) → 중계창 도배 방지
 interface Toast { id: number; text: string; color: string }
@@ -33,6 +34,7 @@ export function RaceScreen({ lineup, seed, theme, onDone, onExit, onSettings }: 
   const [pub, setPub] = useState<PublicRunner[]>([]);
   const [time, setTime] = useState(0);
   const [finishLine, setFinishLine] = useState(race.finishLine);
+  const [reversed, setReversed] = useState(false);
   const [count, setCount] = useState<number | null>(3);
   const [comments, setComments] = useState<Comment[]>([]);
   const [cutin, setCutin] = useState<Cutin | null>(null);
@@ -120,6 +122,12 @@ export function RaceScreen({ lineup, seed, theme, onDone, onExit, onSettings }: 
           if (!cutinBusy.current) showNextCutin();
           break;
         }
+        case 'reverseWorld':
+          play('finishMove', 0);
+          setReversed(true);
+          cutinQueue.current.unshift({ kind: 'reverse', id: idRef.current++ });
+          if (!cutinBusy.current) showNextCutin();
+          break;
         case 'leadChange': play('overtake', 0); setLeaderFlash((x) => x + 1); pushNotice('overtake', e.actor!, '선두로 올라섭니다!'); break;
         case 'finishMove':
           play('finishMove', 0);
@@ -146,7 +154,7 @@ export function RaceScreen({ lineup, seed, theme, onDone, onExit, onSettings }: 
         if (n === 3) sfx.countdown(); else if (n === 0) { sfx.go(); setTimeout(() => setCount(null), 700); }
       },
       onEvents: (evs) => handlerRef.current(evs),
-      onSnapshot: (p, t, fl) => { setPub(p); setTime(t); setFinishLine(fl); },
+      onSnapshot: (p, t, fl) => { setPub(p); setTime(t); setFinishLine(fl); setReversed(race.reversed); },
       onDone: () => doneRef.current(race),
       getSpeed: () => 1, // 배속 선택 삭제: 기본 1배속 고정
     }, theme);
@@ -185,7 +193,7 @@ export function RaceScreen({ lineup, seed, theme, onDone, onExit, onSettings }: 
       <header className="race-header">
         <div className="race-title">꾸한성 대환장 운동회</div>
         <div className="race-clock">⏱ {time.toFixed(2)}<small>s</small></div>
-        <div className={`race-dist${race.finishMoved ? ` moved ${finishLine < race.cfg.baseFinish ? 'shorten' : ''}` : ''}`}>🏁 결승선 {finishLine}m</div>
+        <div className={`race-dist${race.finishMoved ? ` moved ${finishLine < race.cfg.baseFinish ? 'shorten' : ''}` : ''}`}>{reversed ? '🌍 반전 세계 · 출발점 0m가 결승!' : `🏁 결승선 ${finishLine}m`}</div>
         <div className="remain-badge" title="선두 기준 결승선까지 남은 거리">
           <UiImg name="distance" />
           <span className="remain-num">{remain}m</span>
@@ -203,12 +211,12 @@ export function RaceScreen({ lineup, seed, theme, onDone, onExit, onSettings }: 
           {[...Array(Math.floor(finishLine / 10) + 1)].map((_, i) => (
             <span key={i} className="mm-tick" style={{ left: `${((i * 10) / finishLine) * 100}%` }}>{i * 10}</span>
           ))}
-          <span className="mm-finish">🏁</span>
+          <span className={`mm-finish${reversed ? ' reverse' : ''}`}>🏁</span>
           {pub.map((p) => (
             <span
               key={p.index}
               className={`mm-dot${p.finished ? ' done' : ''}`}
-              style={{ left: `${Math.min(100, (p.pos / finishLine) * 100)}%`, background: CHAR_BY_ID[p.id].color, zIndex: 20 - p.rank }}
+              style={{ left: `${Math.min(100, ((reversed ? race.physicalPos(p.pos) : p.pos) / finishLine) * 100)}%`, background: CHAR_BY_ID[p.id].color, zIndex: 20 - p.rank }}
               title={p.name}
             >{p.name[0]}</span>
           ))}
@@ -242,6 +250,17 @@ export function RaceScreen({ lineup, seed, theme, onDone, onExit, onSettings }: 
           </div>
         ))}
       </div>
+
+      {cutin?.kind === 'reverse' && (
+        <div className="cutin reverse-world" key={cutin.id}>
+          <div className="cutin-band">
+            <div className="cutin-text">
+              <div className="cutin-name">🌍 반전 세계 발동!</div>
+              <div className="cutin-line">출발점이 결승선! 모두 뒤돌아 달려라! ↩</div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {cutin?.kind === 'kkuro' && (
         <div className="cutin kkuro" key={cutin.id}>
@@ -308,7 +327,7 @@ export function RaceScreen({ lineup, seed, theme, onDone, onExit, onSettings }: 
                     </span>
                   </div>
                   <div className="rk-pos">
-                    {p.finished ? `✅ ${p.finishTime!.toFixed(3)}초` : `${p.pos.toFixed(1)}m${gap !== null ? ` (-${gap.toFixed(1)}m)` : ''}`}
+                    {p.finished ? `✅ ${p.finishTime!.toFixed(3)}초` : `${reversed ? `↩ ${race.physicalPos(p.pos).toFixed(1)}m 남음` : `${p.pos.toFixed(1)}m`}${gap !== null ? ` (-${gap.toFixed(1)}m)` : ''}`}
                   </div>
                 </div>
               </div>

@@ -74,6 +74,7 @@ export class RaceScene extends Phaser.Scene {
   private obViews = new Map<number, Phaser.GameObjects.Container>();
   private finishVis!: Phaser.GameObjects.Container;
   private finishVisM = 0;
+  private startGateView: Phaser.GameObjects.Image | Phaser.GameObjects.Text | null = null;
   private trapG!: Phaser.GameObjects.Graphics;
   private edgeG!: Phaser.GameObjects.Graphics;
   private edgeTexts: Phaser.GameObjects.Text[] = [];
@@ -255,8 +256,9 @@ export class RaceScene extends Phaser.Scene {
     // 출발선
     g.lineStyle(5, 0xffffff, 1).lineBetween(xOf(0), top, xOf(0), top + h);
     const startGate = this.addGate('gate_start', xOf(0));
+    this.startGateView = startGate;
     if (!startGate) {
-      this.add.text(xOf(0) - 8, top - 10, 'START', {
+      this.startGateView = this.add.text(xOf(0) - 8, top - 10, 'START', {
         fontFamily: 'Arial Black, sans-serif', fontSize: '15px', color: '#ffffff',
       }).setOrigin(1, 1);
     }
@@ -374,7 +376,7 @@ export class RaceScene extends Phaser.Scene {
     const body = this.add.container(0, 0);
     let img: Phaser.GameObjects.Image | null = null;
     if (this.textures.exists(texKey(r.def.id, 'run'))) {
-      img = this.add.image(0, -R * 0.2, texKey(r.def.id, 'run')).setFlipX(isFlipped(r.def.id, 'run'));
+      img = this.add.image(0, -R * 0.2, texKey(r.def.id, 'run')).setFlipX(isFlipped(r.def.id, 'run') !== this.race.reversed);
       this.fitImage(img);
       body.add(img);
     } else {
@@ -415,7 +417,7 @@ export class RaceScene extends Phaser.Scene {
     const key = this.textures.exists(texKey(id, pose)) ? texKey(id, pose) : texKey(id, 'run');
     v.pose = pose;
     v.img.setTexture(key);
-    v.img.setFlipX(isFlipped(id, key === texKey(id, pose) ? pose : 'run')); // 이미지 방향만 반전, 위치·판정 무관
+    v.img.setFlipX(isFlipped(id, key === texKey(id, pose) ? pose : 'run') !== this.race.reversed); // 역주행에서는 캐릭터도 왼쪽을 향함
     this.fitImage(v.img);
   }
 
@@ -486,7 +488,7 @@ export class RaceScene extends Phaser.Scene {
     for (const p of pub) {
       const v = this.views[p.index];
       if (p.finished) v.extra = Math.min(2.5, v.extra + (delta / 1000) * 2.2 * Math.max(0, 1 - v.extra / 2.5) + 0.002);
-      const x = xOf(this.visPos(p, alpha) + v.extra);
+      const x = xOf(this.race.physicalPos(this.visPos(p, alpha) + v.extra));
       v.root.setPosition(x, this.laneY(p.lane));
       const running = this.phaseState !== 'countdown' && (!p.finished || v.extra < 2.4);
       const spd = p.finished ? 1.5 : Math.max(0.6, p.speed);
@@ -548,11 +550,18 @@ export class RaceScene extends Phaser.Scene {
     for (const lane of this.race.obstaclesByLane) {
       for (const ob of lane) {
         const c = this.obViews.get(ob.id)!;
-        const beyond = ob.pos >= this.finishVisM - 0.5;
+        // 반전 시 장애물은 내부 진행 좌표만 거울 변환. 화면에는 원래 물리 위치에 그대로 보인다.
+        const visualPos = this.race.reversed
+          ? this.race.physicalPos(ob.pos + (ob.type === 'zone' ? ob.len : 0))
+          : ob.pos;
+        c.setX(xOf(visualPos));
+        const beyond = this.race.reversed
+          ? ob.pos >= this.race.finishLine - 0.5 || ob.pos < 0
+          : ob.pos >= this.finishVisM - 0.5;
         if (ob.state === 'destroyed' || beyond) { c.setVisible(false); continue; }
         c.setVisible(true);
         if (ob.state === 'hit' && ob.type !== 'zone') c.setAlpha(0.35).setScale(1, 0.6);
-        else c.setAlpha(1);
+        else c.setAlpha(1).setScale(1, 1);
       }
     }
   }
@@ -562,7 +571,7 @@ export class RaceScene extends Phaser.Scene {
     const s = this.laneH / 80;
     for (const tr of this.race.traps) {
       if (tr.done) continue;
-      const x = xOf(tr.pos), y = this.laneY(tr.lane);
+      const x = xOf(this.race.physicalPos(tr.pos)), y = this.laneY(tr.lane);
       g.fillStyle(0x6a1b9a, 0.9).fillRect(x - 12 * s, y + 4 * s, 24 * s, 6 * s);
       g.fillStyle(0xe1bee7);
       for (let k = -1; k <= 1; k++) g.fillTriangle(x + k * 8 * s - 4 * s, y + 4 * s, x + k * 8 * s + 4 * s, y + 4 * s, x + k * 8 * s, y - 8 * s);
@@ -579,7 +588,7 @@ export class RaceScene extends Phaser.Scene {
       focusM = Math.max(lead - 30, (lead * 2 + pack) / 3); // 선두 그룹 중심
     } else focusM = this.race.finishLine;
     const cam = this.cameras.main;
-    const target = xOf(focusM) - VIEW_W * 0.6;
+    const target = xOf(this.race.physicalPos(focusM)) - VIEW_W * 0.6;
     const k = 1 - Math.exp(-delta * 0.004);
     cam.scrollX += (Phaser.Math.Clamp(target, 0, xOf(this.race.cfg.maxFinish) + 500 - VIEW_W) - cam.scrollX) * k;
   }
@@ -591,7 +600,7 @@ export class RaceScene extends Phaser.Scene {
     const leadPos = Math.max(...pub.map((p) => p.pos));
     pub.forEach((p, i) => {
       const t = this.edgeTexts[i];
-      const sx = xOf(p.pos) - cam.scrollX;
+      const sx = xOf(this.race.physicalPos(p.pos)) - cam.scrollX;
       const off = sx < 12 ? 'left' : sx > VIEW_W - 12 ? 'right' : null;
       if (!off) { t.setVisible(false); return; }
       const y = this.laneY(p.lane);
@@ -617,7 +626,7 @@ export class RaceScene extends Phaser.Scene {
 
   private posOf(i: number): { x: number; y: number } {
     const r = this.race.runners[i];
-    return { x: xOf(r.pos + this.views[i].extra), y: this.laneY(r.lane) - this.bodyR * 0.3 };
+    return { x: xOf(this.race.physicalPos(r.pos + this.views[i].extra)), y: this.laneY(r.lane) - this.bodyR * 0.3 };
   }
 
   private fxFor(e: RaceEvent): void {
@@ -678,9 +687,9 @@ export class RaceScene extends Phaser.Scene {
       case 'teleport': {
         const r = this.race.runners[e.actor!];
         const y = this.laneY(r.lane) - R * 0.3;
-        const ok = this.fxImg('teleport', xOf(e.from!), y, { size: R * 3.6, dur: 700, force: true });
-        this.fxImg('teleport', xOf(e.to!), y, { size: R * 4.2, to: 1.2, spin: -90, dur: 900, force: true });
-        if (!ok) { this.ring(xOf(e.from!), y, 0xb39ddb, R * 2.5); this.burst(xOf(e.to!), y, 0xd1c4e9, 16, R * 2.5); }
+        const ok = this.fxImg('teleport', xOf(this.race.physicalPos(e.from!)), y, { size: R * 3.6, dur: 700, force: true });
+        this.fxImg('teleport', xOf(this.race.physicalPos(e.to!)), y, { size: R * 4.2, to: 1.2, spin: -90, dur: 900, force: true });
+        if (!ok) { this.ring(xOf(this.race.physicalPos(e.from!)), y, 0xb39ddb, R * 2.5); this.burst(xOf(this.race.physicalPos(e.to!)), y, 0xd1c4e9, 16, R * 2.5); }
         break;
       }
       case 'dash': {
@@ -731,6 +740,19 @@ export class RaceScene extends Phaser.Scene {
         if (!this.fxImg('heart', x, y - R, { size: R * 3, dur: 900 })) this.burst(x, y, 0xffeb3b, 12, R * 2);
         break;
       }
+      case 'reverseWorld': {
+        // 실제 경기장의 0m가 결승이 되며 기존 START 간판은 숨긴다.
+        this.startGateView?.setVisible(false);
+        this.finishVisM = 0;
+        this.finishVis.x = xOf(0);
+        const label = this.finishVis.getData('label') as Phaser.GameObjects.Text;
+        label.setText(this.finishVis.getData('gate') ? '0m FINISH' : 'FINISH 0m');
+        // 화면에 보이는 모든 캐릭터의 얼굴 방향을 즉시 반전한다.
+        for (const v of this.views) if (v.img) v.img.setFlipX(!v.img.flipX);
+        this.cameras.main.flash(650, 130, 80, 230, false);
+        this.cameras.main.shake(520, 0.01);
+        break;
+      }
       case 'finishMove': {
         const label = this.finishVis.getData('label') as Phaser.GameObjects.Text;
         this.tweens.addCounter({
@@ -755,10 +777,10 @@ export class RaceScene extends Phaser.Scene {
       }
       case 'finish': {
         const r = this.race.runners[e.actor!];
-        this.burst(xOf(this.race.finishLine), this.laneY(r.lane), 0xffd600, 18, R * 3);
+        this.burst(xOf(this.race.physicalPos(this.race.finishLine)), this.laneY(r.lane), 0xffd600, 18, R * 3);
         if (!this.winnerShown) { // 1등 결승 통과: 승리 효과
           this.winnerShown = true;
-          this.fxImg('victory', xOf(this.race.finishLine) + R * 2, this.laneY(r.lane) - R, { size: R * 7, to: 1.3, dur: 1600, force: true, depth: 36 });
+          this.fxImg('victory', xOf(this.race.physicalPos(this.race.finishLine)) + R * 2, this.laneY(r.lane) - R, { size: R * 7, to: 1.3, dur: 1600, force: true, depth: 36 });
         }
         break;
       }

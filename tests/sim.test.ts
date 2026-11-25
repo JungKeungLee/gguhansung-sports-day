@@ -271,6 +271,71 @@ describe('결승선 이동', () => {
   });
 });
 
+describe('🌍 반전 세계: 출발점으로 역주행', () => {
+  const reverseCfg = { ...CONFIG, finishMove: { ...CONFIG.finishMove, outcomes: [{ to: -1, w: 1 }] } };
+
+  it('10명 선두가 50~70m일 때 전원 20m 이상이면 0m로 역주행, 순위 재계산', () => {
+    const race = new Race(ALL, 33, reverseCfg);
+    race.kkuroPlan.done = true;
+    // 첫 번째가 가장 앞서 있었지만 뒤돌아가기 시작하면 맨 뒤 사람이 유리하다.
+    race.runners.forEach((runner, i) => {
+      runner.pos = runner.prevPos = 50 + i;
+      runner.cds = [99, 99]; runner.gauge = 0;
+    });
+    race.finishPlan.at = 50;
+    const original = race.obstaclesByLane.flat().map((o) => ({ id: o.id, pos: o.pos }));
+    race.step();
+    expect(race.reversed).toBe(true);
+    expect(race.finishMoved).toBe(true);
+    expect(race.finishLine).toBe(100); // 내부 진행도는 0→100 증가, 물리 결승선은 0m
+    expect(race.physicalPos(race.finishLine)).toBe(0);
+    expect(race.events.filter((e) => e.type === 'reverseWorld')).toHaveLength(1);
+    expect(race.events.filter((e) => e.type === 'finishMove')).toHaveLength(0);
+    expect(race.runners[0].rank).toBe(1);
+    expect(race.runners[9].rank).toBe(10);
+    for (const old of original) {
+      const ob = race.obstaclesByLane.flat().find((o) => o.id === old.id)!;
+      expect(race.physicalPos(ob.pos + ob.len)).toBeCloseTo(old.pos);
+    }
+    race.runToEnd();
+    expect(race.forcedEnd).toBe(false);
+    for (const runner of race.runners) {
+      expect(runner.finished).toBe(true);
+      expect(race.physicalPos(runner.pos)).toBe(0);
+    }
+    expect(formatCopyText(buildResults(race), 0, true)).toContain('반전 세계');
+  });
+
+  it('2명·5명·10명에서 반전 이벤트는 1회, 모두 완주하고 꾸로 규칙도 유지', () => {
+    for (const n of [2, 5, 10]) {
+      for (let seed = 0; seed < 6; seed++) {
+        const race = new Race(ALL.slice(0, n), seed * 7919 + n, reverseCfg);
+        race.runners.forEach((runner, i) => { runner.pos = runner.prevPos = 30 + i * 0.02; });
+        race.finishPlan.at = 50;
+        race.runToEnd();
+        expect(race.reversed).toBe(true);
+        expect(race.forcedEnd).toBe(false);
+        expect(race.events.filter((e) => e.type === 'reverseWorld')).toHaveLength(1);
+        expect(race.events.filter((e) => e.type === 'kkuro')).toHaveLength(1);
+        expect(buildResults(race)).toHaveLength(n);
+        expect(new Set(race.runners.map((r) => r.index)).size).toBe(n);
+      }
+    }
+  });
+
+  it('출발점에 너무 가까운 참가자가 있으면 늦은 반전을 취소한다', () => {
+    const race = new Race(['yappu', 'moya'], 101, reverseCfg);
+    race.runners[0].pos = 71;
+    race.runners[1].pos = 12;
+    race.finishPlan.at = 50;
+    race.step();
+    expect(race.finishPlan.cancelled).toBe(true);
+    expect(race.reversed).toBe(false);
+    race.runToEnd();
+    expect(race.events.some((e) => e.type === 'reverseWorld')).toBe(false);
+  });
+});
+
 describe('순위 복사', () => {
   it('참가자 전원 + 결승선 거리 + 공동 순위 표기', () => {
     const race = new Race(['nanwony', 'kimokdok', 'yappu'], 77).runToEnd();

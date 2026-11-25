@@ -9,9 +9,16 @@ export function tickRandomEvents(race: Race): void {
   if (!active.length) return;
   const leaderPos = Math.max(...active.map((r) => r.pos));
 
-  // 결승선 이벤트: 경기당 최대 1회, 아무도 완주하기 전, 선두가 사전 결정된 발동 지점을 지날 때
+  // 결승선 이벤트: 반전 세계도 같은 추첨에 포함되므로 70/120/130/150m와 중복 발동하지 않는다.
   const plan = race.finishPlan;
-  if (!race.finishMoved && !plan.cancelled && plan.to !== race.finishLine && race.finishedCount === 0 && leaderPos >= plan.at) {
+  if (!race.reversed && plan.to === -1 && !plan.cancelled && !race.finishMoved &&
+      race.finishedCount === 0 && leaderPos >= plan.at) {
+    // 발동 시 선두 50~70m, 전원 20m 이상 진행. 여건이 안 되면 70m까지 기다린 뒤 취소.
+    if (active.every((r) => r.pos >= cfg.reverseWorld.minRunnerPos) &&
+        leaderPos <= cfg.reverseWorld.maxLeaderPos) race.reverseWorld();
+    else if (leaderPos > cfg.reverseWorld.maxLeaderPos) plan.cancelled = true;
+  }
+  if (!race.finishMoved && !plan.cancelled && plan.to !== -1 && plan.to !== race.finishLine && race.finishedCount === 0 && leaderPos >= plan.at) {
     const shorten = plan.to < race.finishLine;
     // 단축 안전 처리: 선두가 새 결승선에 너무 가까우면(또는 넘었으면) 실행하지 않음 → 기본 거리로 진행
     if (shorten && leaderPos > plan.to - cfg.finishMove.shortenSafety) plan.cancelled = true;
