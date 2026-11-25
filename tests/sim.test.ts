@@ -381,14 +381,15 @@ describe('속도·장애물·꾸로의 괴롭힘 (2026-11)', () => {
     expect(n / 800).toBeGreaterThan(2.85);
     expect(n / 800).toBeLessThan(3.25); // 기존 4.34 × 0.7 ≈ 3.04
   });
-  it('3배속: 같은 시드는 프레임당 스텝 수와 무관하게 같은 결과', () => {
-    const run = (speed: number) => {
-      const race = new Race(ALL, 4242);
-      let acc = 0;
-      while (!race.done) { acc += (16.7 / 1000) * speed; while (acc >= race.cfg.dt && !race.done) { race.step(); acc -= race.cfg.dt; } }
-      return buildResults(race).map((x) => `${x.id}:${x.timeMs}`).join(',');
-    };
-    expect(run(3)).toBe(run(1));
+  it('모야·난워니·다뮤 소폭 개선 수치 유지', () => {
+    const moya = CHARACTERS.find((c) => c.id === 'moya')!;
+    const wony = CHARACTERS.find((c) => c.id === 'nanwony')!;
+    const damyu = CHARACTERS.find((c) => c.id === 'damyu')!;
+    expect(moya.ult.actions[1]).toMatchObject({ type: 'boost', value: 0.5, dur: 4 });
+    expect(wony.skills[1].condition).toBe('bottomHalf');
+    expect(wony.skills[1].cooldown).toBe(12);
+    expect(wony.skills[1].actions[0]).toMatchObject({ type: 'boost', value: 0.4, dur: 3 });
+    expect(damyu.ult.actions[0]).toMatchObject({ type: 'ramp', step: 0.25, max: 0.6, dur: 5 });
   });
   it('꾸로: 경기당 정확히 1회, 인원별 대상 수 범위, 중복 없음, 감속/밀치기 적용', () => {
     const want: Record<number, [number, number]> = { 2: [1, 1], 3: [1, 2], 4: [2, 3], 5: [3, 3], 6: [3, 4], 7: [4, 5], 8: [4, 5], 9: [5, 7], 10: [7, 8] };

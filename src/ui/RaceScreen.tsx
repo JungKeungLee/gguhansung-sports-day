@@ -29,8 +29,6 @@ export function RaceScreen({ lineup, seed, theme, onDone, onExit, onSettings }: 
   const race = useMemo(() => new Race(lineup, seed), [lineup, seed]);
   const defs = useMemo(() => race.runners.map((r) => r.def), [race]);
   const hostRef = useRef<HTMLDivElement>(null);
-  const speedRef = useRef(1);
-  const [speed, setSpeed] = useState(1);
   const { muted } = useSoundSettings();
   const [pub, setPub] = useState<PublicRunner[]>([]);
   const [time, setTime] = useState(0);
@@ -150,7 +148,7 @@ export function RaceScreen({ lineup, seed, theme, onDone, onExit, onSettings }: 
       onEvents: (evs) => handlerRef.current(evs),
       onSnapshot: (p, t, fl) => { setPub(p); setTime(t); setFinishLine(fl); },
       onDone: () => doneRef.current(race),
-      getSpeed: () => speedRef.current,
+      getSpeed: () => 1, // 배속 선택 삭제: 기본 1배속 고정
     }, theme);
     // 경기마다 새 캔버스 사용: Phaser 전역 캔버스 풀 재사용 시 이전 경기 정리 과정이 새 경기 WebGL 컨텍스트를 깨뜨려
     // '다시 하기' 직후 탭이 충돌하는 문제가 있었음
@@ -194,16 +192,7 @@ export function RaceScreen({ lineup, seed, theme, onDone, onExit, onSettings }: 
         </div>
         <div className="race-ctrl">
           <span className="finished-count">완주 {finishedCount}/{n}</span>
-          <div className="speed-panel">
-            <UiImg name="speed" />
-            {/* 배속: 1x / 3x (버튼 위치 클래스 sp1·sp2는 이미지 칸 기준) */}
-            {[1, 3].map((v, i) => (
-              <button key={v} className={`sp-btn sp${i + 1}${speed === v ? ' on' : ''}`} aria-label={`${v}배속`} aria-pressed={speed === v}
-                onClick={() => { speedRef.current = v; setSpeed(v); }} />
-            ))}
-            {/* 이미지의 '설정' 버튼 자리 = 사운드 설정창 (경기는 계속 진행) */}
-            <button className="sp-btn sp3" aria-label="사운드 설정" onClick={onSettings}>{muted && <span className="sp-mute">🔇</span>}</button>
-          </div>
+          <button className="btn small ghost" aria-label="사운드 설정" onClick={onSettings}>{muted ? '🔇 사운드 설정' : '🔊 사운드 설정'}</button>
           <button className="btn small ghost" onClick={onExit}>나가기</button>
         </div>
       </header>

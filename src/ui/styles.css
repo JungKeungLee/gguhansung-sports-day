@@ -282,14 +282,6 @@ img.avatar { border: none; border-radius: 0; object-fit: contain; background: tr
   background: linear-gradient(180deg, #2a0b0e, #14050a); border-radius: 6px; transform: skewX(-8deg);
   font: italic 900 28px 'Arial Black', sans-serif; color: #ffd54f; text-shadow: 0 2px 0 #7a3d00; font-variant-numeric: tabular-nums;
 }
-/* 배속 패널: 이미지 버튼 3칸 위에 투명 클릭 영역 */
-.speed-panel { position: relative; height: 54px; }
-.speed-panel .ui-img { height: 54px; }
-.sp-btn { position: absolute; top: 12%; bottom: 12%; width: 27%; background: transparent; border: none; border-radius: 10px; }
-.sp-btn.sp1 { left: 4%; } .sp-btn.sp2 { left: 36.5%; } .sp-btn.sp3 { left: 69%; }
-.sp-btn:hover { background: rgba(255,255,255,.12); }
-.sp-btn.on { box-shadow: 0 0 0 3px #ffd54f, 0 0 14px #ffd54f; }
-.sp-mute { position: absolute; right: -4px; top: -10px; font-size: 18px; }
 /* 카운트다운 프레임 */
 .countdown-wrap { position: absolute; left: 0; top: 140px; width: 1500px; height: 740px; z-index: 30; pointer-events: none; }
 .countdown-frame { position: absolute; left: 50%; top: 50%; width: 460px; transform: translate(-50%, -54%); }
