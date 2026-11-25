@@ -1,9 +1,9 @@
-name: Tight win-rate optimizer
+name: Tight win-rate independent holdout
 on:
   push:
     branches: ['balance/tight-9_5-to-10_3']
 jobs:
-  optimize:
+  verify:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -14,4 +14,17 @@ jobs:
       - run: npm ci
       - run: npm test
       - run: npm run build
-      - run: npx vite-node scripts/tight-balance-optimizer.ts 4500 7 30000
+  holdout:
+    needs: verify
+    strategy:
+      matrix:
+        mode: [mixed, reverse]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npx vite-node scripts/tight-balance-holdout.ts ${{ matrix.mode }} 25000 60000
