@@ -1,0 +1,30 @@
+name: Tight win-rate probe
+on:
+  push:
+    branches: ['balance/tight-9_5-to-10_3']
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - run: npm run build
+  probe:
+    needs: verify
+    strategy:
+      matrix:
+        mode: [mixed, reverse]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npx vite-node scripts/tight-balance-probe.ts 6500 20000 ${{ matrix.mode }}
