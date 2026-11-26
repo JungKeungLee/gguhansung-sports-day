@@ -27,4 +27,4 @@ jobs:
           node-version: '22'
           cache: npm
       - run: npm ci
-      - run: npx vite-node scripts/tight-balance-holdout.ts ${{ matrix.mode }} 25000 90000
+      - run: npx vite-node scripts/tight-balance-holdout.ts ${{ matrix.mode }} 25000 120000
