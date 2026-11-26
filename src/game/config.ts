@@ -86,7 +86,7 @@ export const CONFIG = {
   // 일반 경기도 10인 우승 확률을 좁히기 위한 작은 이동속도 배율. 스킬/필살기 수치는 보존.
   normalSpeedFactor: {
     yappu: 0.9978, harunotsuki: 1, manjo: 0.999, moya: 0.9991, yuntami: 0.9985,
-    yamuji: 1.0028, nanwony: 1.0005, kkutinho: 1.0005, kimokdok: 0.987, damyu: 1.001,
+    yamuji: 1.0028, nanwony: 1.0005, kkutinho: 1.0005, kimokdok: 0.9852, damyu: 1.001,
   } as Record<CharId, number>,
 
   // 반전 세계는 결승선 이동과 상호 배타적. 모든 선수가 20m 이상 달렸을 때만 발동.

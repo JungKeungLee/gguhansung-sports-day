@@ -1,7 +1,7 @@
 name: Tight win-rate independent holdout
 on:
   push:
-    branches: ['balance/tight-9_5-to-10_3']
+    branches: ['balance/tight-final-holdout']
 jobs:
   verify:
     runs-on: ubuntu-latest
@@ -27,4 +27,4 @@ jobs:
           node-version: '22'
           cache: npm
       - run: npm ci
-      - run: npx vite-node scripts/tight-balance-holdout.ts ${{ matrix.mode }} 25000 60000
+      - run: npx vite-node scripts/tight-balance-holdout.ts ${{ matrix.mode }} 25000 90000
