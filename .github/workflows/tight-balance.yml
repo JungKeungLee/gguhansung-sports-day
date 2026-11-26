@@ -1,0 +1,23 @@
+name: Tight balance experiments
+on:
+  push:
+    branches: ['feature/tight-10pct-balance']
+jobs:
+  normal:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: '22',cache: npm}
+      - run: npm ci
+      - run: npm test
+      - run: npm run build
+      - run: npx vite-node scripts/tight-balance.ts normal 3000 11500
+  reverse:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: '22',cache: npm}
+      - run: npm ci
+      - run: npx vite-node scripts/tight-balance.ts reverse 3000 11500
