@@ -142,8 +142,8 @@ export class Race {
       if (r.finished) continue;
       r.prevPos = r.pos;
       let next: number;
-      // 역주행에서만 속도를 캐릭터별 미세 보정. 정상 경기의 9~11% 밸런스는 유지.
-      const speedFactor = this.reversed ? cfg.reverseWorld.speedFactor[r.def.id] : 1;
+      // 진행 방향별 속도 미세 보정. 우승자 지정이 아니라 실제 이동/장애물/스킬 판정에 반영.
+      const speedFactor = this.reversed ? cfg.reverseWorld.speedFactor[r.def.id] : this.runners.length === 10 ? cfg.normalSpeedFactor[r.def.id] : 1;
       if (r.dash) {
         const cap = this.finishLine - 0.5;
         const move = Math.min(r.dash.speed * speedFactor * dt, r.dash.remaining);
