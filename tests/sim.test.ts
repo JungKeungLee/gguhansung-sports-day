@@ -271,7 +271,11 @@ describe('결승선 이동', () => {
   });
 });
 
-describe('반전 세계 전용 속도 보정', () => {
+describe('일반·반전 세계 별도 속도 보정', () => {
+  it('모든 캐릭터의 일반 보정 계수는 양수', () => {
+    for (const factor of Object.values(CONFIG.normalSpeedFactor)) expect(factor).toBeGreaterThan(0);
+  });
+
   it('반전 중에는 실제 이동속도만 조금 달라지고 출발점 결승은 유지', () => {
     const normal = new Race(['yappu', 'moya'], 712, cfgNoEvents);
     const boostedCfg = { ...cfgNoEvents, reverseWorld: {

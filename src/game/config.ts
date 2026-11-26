@@ -83,6 +83,11 @@ export const CONFIG = {
     shortenWindow: [30, 55] as [number, number], // 단축: 70m보다 충분히 앞에서 발동
     shortenSafety: 8,  // 단축 시 모든 선수가 새 결승선보다 이 거리(m) 이상 뒤에 있어야 함, 아니면 취소
   },
+  // 일반 달리기에서만 적용하는 작은 캐릭터별 속도 보정 (우승 결과를 미리 지정하지 않음).
+  normalSpeedFactor: {
+    yappu: 1, harunotsuki: 1, manjo: 1, moya: 1, yuntami: 1,
+    yamuji: 1, nanwony: 1, kkutinho: 1, kimokdok: 1, damyu: 1,
+  } as Record<CharId, number>,
   // 반전 세계는 결승선 이동과 상호 배타적. 모든 선수가 20m 이상 달렸을 때만 발동.
   reverseWorld: {
     window: [50, 70] as [number, number],
